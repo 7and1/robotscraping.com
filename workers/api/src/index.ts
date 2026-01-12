@@ -1,10 +1,22 @@
 import type { Env, JobMessage } from './types';
 
-// All imports are deferred to runtime to avoid module load issues
+// Minimal test handler
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { handleRequest } = await import('./handler');
-    return handleRequest(request, env, ctx);
+    const url = new URL(request.url);
+
+    // Health check without importing any modules
+    if (url.pathname === '/health') {
+      return Response.json({ ok: true, service: 'robot-scraping-core' }, { status: 200 });
+    }
+
+    // Try importing handler for other requests
+    try {
+      const { handleRequest } = await import('./handler');
+      return handleRequest(request, env, ctx);
+    } catch (error) {
+      return Response.json({ error: (error as Error).message }, { status: 500 });
+    }
   },
   async queue(batch: MessageBatch<JobMessage>, env: Env): Promise<void> {
     const { handleQueue } = await import('./queue');
