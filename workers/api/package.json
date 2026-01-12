@@ -19,6 +19,6 @@
     "miniflare": "^3.20240524.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0",
-    "wrangler": "^3.50.0"
+    "wrangler": "4.58.0"
   }
 }
