@@ -10,6 +10,19 @@ export default {
       return Response.json({ ok: true, service: 'robot-scraping-core' }, { status: 200 });
     }
 
+    // Test endpoint to check if handler import works
+    if (url.pathname === '/test') {
+      try {
+        await import('./handler');
+        return Response.json({ ok: true, message: 'Handler loaded successfully' }, { status: 200 });
+      } catch (error) {
+        return Response.json(
+          { error: (error as Error).message, stack: (error as Error).stack },
+          { status: 500 },
+        );
+      }
+    }
+
     // Try importing handler for other requests
     try {
       const { handleRequest } = await import('./handler');
