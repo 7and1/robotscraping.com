@@ -821,7 +821,7 @@ async function handleSchedules(
     }
 
     try {
-      computeNextRun(cron, Date.now());
+      await computeNextRun(cron, Date.now());
     } catch (error) {
       return jsonResponse(
         {
@@ -924,7 +924,7 @@ async function handleSchedules(
     const willBeActive = typeof is_active === 'boolean' ? is_active : schedule.is_active === 1;
     if (cron) {
       try {
-        const computed = computeNextRun(cron, now);
+        const computed = await computeNextRun(cron, now);
         if (willBeActive) {
           nextRunAt = computed;
         } else if (typeof is_active === 'boolean' && !is_active) {
@@ -943,7 +943,7 @@ async function handleSchedules(
     } else if (typeof is_active === 'boolean') {
       if (is_active) {
         try {
-          nextRunAt = computeNextRun(schedule.cron, now);
+          nextRunAt = await computeNextRun(schedule.cron, now);
         } catch (error) {
           return jsonResponse(
             {

@@ -1,5 +1,9 @@
-import cronParser from 'cron-parser';
 import type { ScheduleRecord } from '../types';
+
+// Dynamic import to avoid module load issues in Cloudflare Workers
+async function getCronParser() {
+  return (await import('cron-parser')).default;
+}
 
 export interface CreateScheduleInput {
   id: string;
@@ -14,7 +18,8 @@ export interface CreateScheduleInput {
   createdAt: number;
 }
 
-export function computeNextRun(cron: string, nowMs: number): number {
+export async function computeNextRun(cron: string, nowMs: number): Promise<number> {
+  const cronParser = await getCronParser();
   const interval = cronParser.parseExpression(cron, {
     currentDate: new Date(nowMs),
     tz: 'UTC',
@@ -23,7 +28,7 @@ export function computeNextRun(cron: string, nowMs: number): number {
 }
 
 export async function createSchedule(db: D1Database, input: CreateScheduleInput): Promise<void> {
-  const nextRunAt = computeNextRun(input.cron, input.createdAt);
+  const nextRunAt = await computeNextRun(input.cron, input.createdAt);
   await db
     .prepare(
       'INSERT INTO schedules (id, api_key_id, url, fields_config, schema_json, instructions, cron, webhook_url, webhook_secret, is_active, next_run_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',

@@ -10,7 +10,7 @@ export async function handleCron(env: Env, ctx: ExecutionContext): Promise<void>
 
   for (const schedule of schedules) {
     const jobId = crypto.randomUUID();
-    const nextRunAt = computeNextRun(schedule.cron, now);
+    const nextRunAt = await computeNextRun(schedule.cron, now);
 
     await updateSchedule(env.DB, {
       id: schedule.id,
