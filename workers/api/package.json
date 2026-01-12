@@ -1,0 +1,24 @@
+{
+  "name": "@robotscraping/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "keygen": "node scripts/generate-api-key.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
+    "cron-parser": "^4.9.0",
+    "openai": "^4.52.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240524.0",
+    "miniflare": "^3.20240524.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0",
+    "wrangler": "^3.50.0"
+  }
+}

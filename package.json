@@ -1,0 +1,20 @@
+{
+  "name": "robotscraping.com",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "workers/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "dev:worker": "npm run dev -w workers/api",
+    "build": "npm run build -w apps/web",
+    "test": "npm run test -w workers/api && npm run test -w apps/web",
+    "lint": "npm run lint -w apps/web",
+    "format": "prettier -w ."
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5"
+  }
+}

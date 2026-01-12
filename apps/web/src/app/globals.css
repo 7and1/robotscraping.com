@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --ink: #0a0a0e;
+  --neon: #7cffb2;
+  --laser: #ff4f9a;
+  --cyan: #41f0ff;
+  --smoke: rgba(255, 255, 255, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--ink);
+  color: #e6fdf1;
+  font-family: var(--font-display), 'Space Grotesk', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: rgba(124, 255, 178, 0.25);
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(var(--smoke) 1px, transparent 1px),
+    linear-gradient(90deg, var(--smoke) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.glass {
+  background: linear-gradient(135deg, rgba(17, 21, 28, 0.85), rgba(12, 15, 22, 0.6));
+  border: 1px solid rgba(124, 255, 178, 0.15);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+}
+
+.scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+}
