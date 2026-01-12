@@ -11,11 +11,8 @@ export function resolveAiConfig(env: Env): {
     provider === 'anthropic'
       ? env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
       : env.OPENAI_MODEL || 'gpt-4o-mini';
-  const apiKey = provider === 'anthropic' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error(`${provider} API key is not configured.`);
-  }
+  const apiKey =
+    provider === 'anthropic' ? env.ANTHROPIC_API_KEY || 'dummy' : env.OPENAI_API_KEY || 'dummy';
 
   return {
     provider,
