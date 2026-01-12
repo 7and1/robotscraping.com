@@ -102,6 +102,10 @@ export async function listJobs(
     `SELECT * FROM jobs ${where} ORDER BY created_at DESC LIMIT ${limit}`,
   );
 
-  const result = await statement.bind(...values).all();
+  // Use Reflect.apply to avoid 'Illegal invocation' error with spread
+  const result =
+    values.length > 0
+      ? await Reflect.apply(statement.bind, statement, values).all()
+      : await statement.all();
   return (result.results as JobRecord[]) ?? [];
 }

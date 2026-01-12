@@ -162,5 +162,6 @@ export async function updateSchedule(
     values.push(params.id);
   }
 
-  await statement.bind(...values).run();
+  // Use Reflect.apply to avoid 'Illegal invocation' error with spread
+  await Reflect.apply(statement.bind, statement, values).run();
 }
