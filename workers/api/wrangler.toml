@@ -9,7 +9,7 @@ binding = "MYBROWSER"
 [[d1_databases]]
 binding = "DB"
 database_name = "robot-db"
-database_id = "YOUR_D1_DATABASE_ID"
+database_id = "8c56033f-b93e-4f8c-b836-7b2a291db59c"
 
 [[r2_buckets]]
 binding = "BUCKET"
