@@ -1,16 +1,9 @@
-import { handleRequest } from './handler';
-import { handleQueue } from './queue';
-import { handleCron } from './cron';
-import type { Env, JobMessage } from './types';
+import type { Env } from './types';
 
+// Minimal handler for testing - imports full handler dynamically
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const { handleRequest } = await import('./handler');
     return handleRequest(request, env, ctx);
-  },
-  async queue(batch: MessageBatch<JobMessage>, env: Env): Promise<void> {
-    return handleQueue(batch, env);
-  },
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(handleCron(env, ctx));
   },
 };
