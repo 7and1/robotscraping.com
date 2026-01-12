@@ -459,14 +459,13 @@ async function handleExtract(
       return jsonResponse(responseBody, 403, corsHeaders);
     }
 
-    const aiConfig = resolveAiConfig(env);
+    const { provider, model, apiKey, baseUrl } = resolveAiConfig(env);
 
     extractResult = await extractor({
-      provider: aiConfig.provider,
-      model: aiConfig.model,
-      apiKey: aiConfig.apiKey,
-      baseUrl: aiConfig.baseUrl,
-      ai: aiConfig.ai,
+      provider,
+      model,
+      apiKey,
+      baseUrl,
       content: scrapeResult.content,
       fields: parsed.data.fields,
       schema: parsed.data.schema,

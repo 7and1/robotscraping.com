@@ -1,5 +1,5 @@
 export function getCorsHeaders(origin?: string): Record<string, string> {
-  const allowedOrigin = origin || process.env.CORS_ORIGIN || '*';
+  const allowedOrigin = origin || '*';
   const headers: Record<string, string> = {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
