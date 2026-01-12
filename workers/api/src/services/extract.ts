@@ -3,24 +3,34 @@ import { safeJsonParse } from '../lib/parse';
 import type { ExtractResult } from '../types';
 
 export interface ExtractOptions {
-  provider: 'openai' | 'anthropic';
+  provider: 'cloudflare' | 'openai' | 'anthropic';
   model: string;
-  apiKey: string;
+  apiKey?: string;
   content: string;
   fields?: string[];
   schema?: Record<string, unknown>;
   instructions?: string;
   baseUrl?: string;
+  ai?: Ai;
 }
 
 export async function extractWithLLM(options: ExtractOptions): Promise<ExtractResult> {
   const systemPrompt = buildSystemPrompt(options.fields, options.schema, options.instructions);
   const userPrompt = buildUserPrompt(options.content, options.fields, options.schema);
 
+  if (options.provider === 'cloudflare') {
+    return extractWithCloudflareAI({
+      ai: options.ai!,
+      model: options.model,
+      systemPrompt,
+      userPrompt,
+    });
+  }
+
   if (options.provider === 'anthropic') {
     return extractWithAnthropic({
       model: options.model,
-      apiKey: options.apiKey,
+      apiKey: options.apiKey!,
       systemPrompt,
       userPrompt,
     });
@@ -28,7 +38,7 @@ export async function extractWithLLM(options: ExtractOptions): Promise<ExtractRe
 
   return extractWithOpenAI({
     model: options.model,
-    apiKey: options.apiKey,
+    apiKey: options.apiKey!,
     baseUrl: options.baseUrl,
     systemPrompt,
     userPrompt,
@@ -65,6 +75,32 @@ function buildUserPrompt(
   return ['CONTENT_START', content, 'CONTENT_END', fieldLine, schemaLine]
     .filter(Boolean)
     .join('\n');
+}
+
+async function extractWithCloudflareAI(params: {
+  ai: Ai;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<ExtractResult> {
+  const response = await params.ai.run(
+    { model: params.model },
+    {
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+    },
+  );
+
+  const raw = response.text ?? '{}';
+  const parsed = safeJsonParse(raw);
+
+  return {
+    data: parsed.data || parsed,
+    usage: 0, // Cloudflare Workers AI doesn't return token count
+    raw,
+  };
 }
 
 async function extractWithOpenAI(params: {

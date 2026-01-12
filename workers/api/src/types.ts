@@ -1,9 +1,10 @@
 export interface Env {
   MYBROWSER: unknown;
+  AI: Ai;
   DB: D1Database;
   BUCKET: R2Bucket;
   TASK_QUEUE: Queue;
-  OPENAI_API_KEY: string;
+  OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   AI_PROVIDER?: string;

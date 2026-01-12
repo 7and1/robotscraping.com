@@ -225,12 +225,13 @@ export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Pr
         continue;
       }
 
-      const { provider, model, apiKey, baseUrl } = resolveAiConfig(env);
+      const aiConfig = resolveAiConfig(env);
       const extractResult = await extractWithLLM({
-        provider,
-        model,
-        apiKey,
-        baseUrl,
+        provider: aiConfig.provider,
+        model: aiConfig.model,
+        apiKey: aiConfig.apiKey,
+        baseUrl: aiConfig.baseUrl,
+        ai: aiConfig.ai,
         content: scrapeResult.content,
         fields: payload.fields,
         schema: payload.schema,
