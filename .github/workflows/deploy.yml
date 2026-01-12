@@ -47,6 +47,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create wrangler.toml with secrets
+        run: |
+          cd workers/api
+          cat wrangler.toml.example > wrangler.toml
+          sed -i 's/YOUR_D1_DATABASE_ID/${{ secrets.D1_DATABASE_ID }}/g' wrangler.toml
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+
       - name: Create Queue (if not exists)
         run: cd workers/api && npx wrangler queues create robot-tasks || true
         env:
