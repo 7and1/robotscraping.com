@@ -1,4 +1,3 @@
-import puppeteer from '@cloudflare/puppeteer';
 import type { ScrapeResult } from '../types';
 
 export interface ScrapeOptions {
@@ -22,10 +21,12 @@ export async function scrapePage(
   targetUrl: string,
   options: ScrapeOptions,
 ): Promise<ScrapeResult> {
-  const browser = await puppeteer.launch(browserBinding as never);
-  let page: puppeteer.Page | null = null;
+  // Dynamic import to avoid module load issues
+  const puppeteer = (await import('@cloudflare/puppeteer')).default;
+  let page: any = null;
 
   try {
+    const browser = await puppeteer.launch(browserBinding as never);
     page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900 });
     await page.setUserAgent(
@@ -33,7 +34,7 @@ export async function scrapePage(
     );
 
     await page.setRequestInterception(true);
-    page.on('request', (request) => {
+    page.on('request', (request: any) => {
       const resourceType = request.resourceType();
       if (['image', 'media', 'font'].includes(resourceType)) {
         request.abort();
@@ -54,7 +55,7 @@ export async function scrapePage(
 
         document
           .querySelectorAll('script, style, svg, noscript, iframe, canvas')
-          .forEach((el) => el.remove());
+          .forEach((el: Element) => el.remove());
 
         const root =
           document.querySelector('main, article, [role="main"], #content, #main, .content') ||
@@ -129,6 +130,8 @@ export async function scrapePage(
       ? ((await page.screenshot({ type: 'webp', quality: 55 })) as ArrayBuffer)
       : undefined;
 
+    await browser.close();
+
     return {
       content: result.content || '',
       title: result.title || null,
@@ -137,10 +140,13 @@ export async function scrapePage(
       screenshot,
       screenshotType: screenshot ? 'image/webp' : undefined,
     };
-  } finally {
-    if (page) {
-      await page.close();
-    }
-    await browser.close();
+  } catch (error) {
+    return {
+      content: '',
+      title: null,
+      description: null,
+      blocked: false,
+      error: (error as Error).message,
+    };
   }
 }

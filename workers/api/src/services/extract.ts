@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { safeJsonParse } from '../lib/parse';
 import type { ExtractResult } from '../types';
 
@@ -74,6 +73,8 @@ async function extractWithOpenAI(params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<ExtractResult> {
+  // Dynamic import to avoid module load issues in Cloudflare Workers
+  const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey: params.apiKey, baseURL: params.baseUrl });
 
   const response = await client.chat.completions.create({

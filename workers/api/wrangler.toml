@@ -24,8 +24,8 @@ queue = "robot-tasks"
 max_batch_size = 1
 max_batch_timeout = 60
 
-# [triggers]
-# crons = ["* * * * *"]
+[triggers]
+crons = ["* * * * *"]
 
 [vars]
 AI_PROVIDER = "openai"
