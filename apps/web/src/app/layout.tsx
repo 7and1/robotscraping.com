@@ -6,14 +6,16 @@ import { StructuredData } from './structured-data';
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   variable: '--font-display',
-  display: 'swap',
+  display: 'optional',
+  preload: true,
 });
 
 const plexMono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
   variable: '--font-mono',
-  display: 'swap',
+  display: 'optional',
+  preload: true,
 });
 
 const googleVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
@@ -54,7 +56,7 @@ export const metadata: Metadata = {
     siteName: 'RobotScraping.com',
     images: [
       {
-        url: '/opengraph-image',
+        url: 'https://robotscraping.com/opengraph-image',
         width: 1200,
         height: 630,
         alt: 'RobotScraping.com - AI Web Scraping API',
@@ -67,7 +69,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'RobotScraping.com — AI Web Scraping API',
     description: 'Extract structured data from any website using AI. No CSS selectors, just JSON.',
-    images: ['/opengraph-image'],
+    images: ['https://robotscraping.com/opengraph-image'],
     creator: '@robotscraping',
   },
   robots: {
@@ -101,6 +103,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${spaceGrotesk.variable} ${plexMono.variable} bg-ink text-white antialiased`}
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-neon focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black focus:outline-none focus:ring-2 focus:ring-neon/50"
+        >
+          Skip to main content
+        </a>
         <StructuredData />
         {children}
       </body>

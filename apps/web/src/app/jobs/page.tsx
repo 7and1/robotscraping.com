@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Search, TerminalSquare } from 'lucide-react';
+import { RefreshCw, Search, TerminalSquare, Copy } from 'lucide-react';
 import clsx from 'clsx';
 
 interface JobRecord {
@@ -32,6 +32,20 @@ export default function JobsPage() {
   const [result, setResult] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [copiedResult, setCopiedResult] = useState(false);
+
+  const resultPreRef = useRef<HTMLPreElement>(null);
+
+  const copyResult = useCallback(async () => {
+    if (!result || result.startsWith('//')) return;
+    try {
+      await navigator.clipboard.writeText(result);
+      setCopiedResult(true);
+      setTimeout(() => setCopiedResult(false), 2000);
+    } catch {
+      // Silently fail if clipboard is not available
+    }
+  }, [result]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('robot_api_key');
@@ -64,24 +78,28 @@ export default function JobsPage() {
     setLoading(false);
   };
 
-  const loadResult = async (job: JobRecord) => {
-    setSelected(job);
-    setResult('');
-    if (!job.result_url) {
-      setResult('// Result not available yet.');
-      return;
-    }
+  const loadResult = useCallback(
+    async (job: JobRecord) => {
+      setSelected(job);
+      setResult('');
+      setCopiedResult(false);
+      if (!job.result_url) {
+        setResult('// Result not available yet.');
+        return;
+      }
 
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/result`, {
-        headers: apiKey ? { 'x-api-key': apiKey } : {},
-      });
-      const text = await res.text();
-      setResult(text);
-    } catch (err) {
-      setResult('// Failed to fetch result.');
-    }
-  };
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/result`, {
+          headers: apiKey ? { 'x-api-key': apiKey } : {},
+        });
+        const text = await res.text();
+        setResult(text);
+      } catch (err) {
+        setResult('// Failed to fetch result.');
+      }
+    },
+    [apiKey],
+  );
 
   useEffect(() => {
     loadJobs();
@@ -89,7 +107,7 @@ export default function JobsPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
+    <main id="main-content" className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-wrap items-center justify-between gap-6">
           <div>
@@ -183,8 +201,28 @@ export default function JobsPage() {
           </div>
 
           <div className="glass rounded-2xl p-6">
-            <h2 className="mb-4 text-lg font-semibold">Result preview</h2>
-            <pre className="min-h-[420px] whitespace-pre-wrap rounded-xl border border-white/10 bg-black/60 p-4 font-mono text-xs text-neon/80">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Result preview</h2>
+              {result && !result.startsWith('//') && (
+                <button
+                  onClick={copyResult}
+                  aria-label={
+                    copiedResult ? 'Result copied to clipboard' : 'Copy result to clipboard'
+                  }
+                  className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-xs text-white/70 transition hover:border-neon/70 hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50"
+                >
+                  <Copy className="h-4 w-4" aria-hidden="true" />
+                  {copiedResult ? 'Copied!' : 'Copy'}
+                </button>
+              )}
+            </div>
+            <pre
+              ref={resultPreRef}
+              className="min-h-[420px] max-h-[500px] overflow-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/60 p-4 font-mono text-xs text-neon/80"
+              tabIndex={0}
+              aria-live="polite"
+              aria-label="Job result JSON"
+            >
               {result || '// Select a job to view its result.'}
             </pre>
           </div>

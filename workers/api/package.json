@@ -12,7 +12,8 @@
   "dependencies": {
     "@cloudflare/puppeteer": "^1.0.4",
     "cron-parser": "^4.9.0",
-    "openai": "^4.52.0"
+    "openai": "^4.52.0",
+    "zod": "4.3.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240524.0",

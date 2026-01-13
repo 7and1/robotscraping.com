@@ -1,4 +1,4 @@
--- Schema version: 2026-01-12 (v1.1) — adds cache_entries + event_logs
+-- Schema version: 2026-01-12 (v1.2) — adds webhook_dead_letters, idempotency_entries
 -- Increment version/date with each DDL change; newest entry stays at top.
 
 -- API key management (store hashes, never raw keys)
@@ -112,3 +112,29 @@ CREATE TABLE IF NOT EXISTS event_logs (
 CREATE INDEX IF NOT EXISTS idx_event_logs_created ON event_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_event_logs_request ON event_logs(request_id);
 CREATE INDEX IF NOT EXISTS idx_event_logs_api_key ON event_logs(api_key_id);
+
+-- Idempotency entries for duplicate request handling
+CREATE TABLE IF NOT EXISTS idempotency_entries (
+  idempotency_key TEXT PRIMARY KEY,
+  request_hash TEXT NOT NULL,
+  response_body TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON idempotency_entries(expires_at);
+
+-- Webhook dead letter queue for failed webhook deliveries
+CREATE TABLE IF NOT EXISTS webhook_dead_letters (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  target_url TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  error TEXT NOT NULL,
+  attempts INTEGER NOT NULL,
+  failed_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_dl_job ON webhook_dead_letters(job_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_dl_failed_at ON webhook_dead_letters(failed_at);

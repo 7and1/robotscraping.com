@@ -177,7 +177,7 @@ export default function SchedulesPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
+    <main id="main-content" className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-wrap items-center justify-between gap-6">
           <div>
@@ -189,7 +189,7 @@ export default function SchedulesPage() {
           </div>
           <div className="flex items-center gap-4 text-xs text-white/60">
             <Link className="transition hover:text-neon" href="/">
-              ← Back to home
+              Back to home
             </Link>
             <Link className="transition hover:text-neon" href="/usage">
               Usage

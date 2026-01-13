@@ -44,6 +44,21 @@ export interface ExtractRequest {
     storeContent?: boolean;
     waitUntil?: 'domcontentloaded' | 'networkidle0';
     timeoutMs?: number;
+    proxy?: {
+      type?: 'browser' | 'proxy_grid' | 'residential' | 'datacenter';
+      country?: string;
+      sessionId?: string;
+    };
+    headers?: Record<string, string>;
+    cookies?: Array<{
+      name: string;
+      value: string;
+      domain?: string;
+      path?: string;
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'Strict' | 'Lax' | 'None';
+    }>;
   };
 }
 
@@ -135,4 +150,29 @@ export interface ScheduleRecord {
   next_run_at?: number | null;
   last_run_at?: number | null;
   created_at: number;
+}
+
+export interface HandlerDeps {
+  scrape?: (
+    browser: unknown,
+    url: string,
+    options: {
+      waitUntil?: 'domcontentloaded' | 'networkidle0';
+      timeoutMs?: number;
+      screenshot?: boolean;
+      maxContentChars?: number;
+    },
+  ) => Promise<ScrapeResult>;
+  extract?: (params: {
+    provider: string;
+    model: string;
+    apiKey: string;
+    baseUrl?: string;
+    content: string;
+    fields?: string[];
+    schema?: Record<string, unknown>;
+    instructions?: string;
+  }) => Promise<ExtractResult>;
+  now?: () => number;
+  uuid?: () => string;
 }

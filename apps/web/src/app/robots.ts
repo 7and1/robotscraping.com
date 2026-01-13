@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api', '/api/webhook'],
+        disallow: ['/api', '/api/webhook', '/_next', '/static'],
       },
       {
         userAgent: 'GPTBot',
@@ -26,6 +26,26 @@ export default function robots(): MetadataRoute.Robots {
       },
       {
         userAgent: 'Claude-Web',
+        disallow: '/',
+      },
+      {
+        userAgent: 'Google-Extended',
+        disallow: '/',
+      },
+      {
+        userAgent: 'PerplexityBot',
+        disallow: '/',
+      },
+      {
+        userAgent: 'Bytespider',
+        disallow: '/',
+      },
+      {
+        userAgent: 'FacebookBot',
+        disallow: '/',
+      },
+      {
+        userAgent: 'ImagesiftBot',
         disallow: '/',
       },
     ],

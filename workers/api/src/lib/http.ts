@@ -1,3 +1,5 @@
+import { getSecurityHeaders } from './security';
+
 export function getCorsHeaders(origin?: string): Record<string, string> {
   const allowedOrigin = origin || '*';
   const headers: Record<string, string> = {
@@ -25,7 +27,7 @@ export function jsonResponse(
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store, no-cache, must-revalidate',
       Pragma: 'no-cache',
-      'X-Content-Type-Options': 'nosniff',
+      ...getSecurityHeaders(),
       ...headers,
     },
   });
@@ -40,7 +42,7 @@ export function textResponse(
     status,
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
-      'X-Content-Type-Options': 'nosniff',
+      ...getSecurityHeaders(),
       ...headers,
     },
   });
@@ -69,11 +71,7 @@ export function errorResponse(
 
 export function withStandardHeaders(headers: Record<string, string> = {}): Record<string, string> {
   return {
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+    ...getSecurityHeaders(),
     ...headers,
   };
 }

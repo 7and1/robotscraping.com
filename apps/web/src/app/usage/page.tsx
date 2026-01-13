@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, RefreshCw } from 'lucide-react';
+import { Activity, BarChart3, RefreshCw, Download } from 'lucide-react';
 import clsx from 'clsx';
 
 interface UsageSummary {
@@ -105,8 +105,9 @@ export default function UsagePage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setExporting(false);
     }
-    setExporting(false);
   };
 
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function UsagePage() {
   const sparklinePath = buildSparklinePath(sparkValues, 200, 48, 6);
 
   return (
-    <main className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
+    <main id="main-content" className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-wrap items-center justify-between gap-6">
           <div>
@@ -134,7 +135,7 @@ export default function UsagePage() {
           </div>
           <div className="text-xs text-white/60">
             <Link className="transition hover:text-neon" href="/">
-              ← Back to home
+              Back to home
             </Link>
           </div>
         </header>
@@ -173,11 +174,12 @@ export default function UsagePage() {
               disabled={exporting}
               aria-busy={exporting}
               className={clsx(
-                'flex items-center gap-2 rounded-xl border border-white/20 px-4 py-3 text-xs uppercase tracking-[0.25em] text-white/70 transition hover:border-neon/60 hover:text-neon',
-                exporting && 'opacity-60',
+                'flex items-center gap-2 rounded-xl border border-white/20 px-4 py-3 text-xs uppercase tracking-[0.25em] text-white/70 transition hover:border-neon/60 hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50',
+                exporting && 'opacity-60 cursor-not-allowed',
               )}
             >
-              Download CSV
+              <Download className={clsx('h-4 w-4', exporting && 'animate-bounce')} />
+              {exporting ? 'Downloading...' : 'Download CSV'}
             </button>
           </div>
           {error && <p className="mt-3 text-xs text-laser">{error}</p>}

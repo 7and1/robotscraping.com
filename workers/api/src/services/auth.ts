@@ -24,43 +24,42 @@ export async function consumeApiKey(
   }
 
   const keyHash = await sha256(apiKey);
-  const update = await db
+
+  // Use RETURNING clause to get updated values in a single query
+  const result = await db
     .prepare(
-      'UPDATE api_keys SET remaining_credits = remaining_credits - 1, last_used_at = ? WHERE key_hash = ? AND is_active = 1 AND remaining_credits > 0',
+      `UPDATE api_keys
+       SET remaining_credits = remaining_credits - 1, last_used_at = ?
+       WHERE key_hash = ? AND is_active = 1 AND remaining_credits > 0
+       RETURNING id, remaining_credits`,
     )
     .bind(now, keyHash)
-    .run();
+    .first<{ id: string; remaining_credits: number }>();
 
-  if (update.meta.changes === 0) {
-    const record = await db
-      .prepare('SELECT id, remaining_credits, is_active FROM api_keys WHERE key_hash = ?')
-      .bind(keyHash)
-      .first();
-
-    if (!record) {
-      return { ok: false, errorCode: 'invalid' };
-    }
-    if (!record.is_active) {
-      return { ok: false, errorCode: 'inactive' };
-    }
+  if (result) {
     return {
-      ok: false,
-      errorCode: 'insufficient_credits',
-      remainingCredits:
-        typeof record.remaining_credits === 'number' ? record.remaining_credits : null,
+      ok: true,
+      apiKeyId: result.id,
+      remainingCredits: result.remaining_credits,
     };
   }
 
-  const updated = await db
-    .prepare('SELECT id, remaining_credits FROM api_keys WHERE key_hash = ?')
+  // Key didn't match update conditions - check reason
+  const record = await db
+    .prepare('SELECT id, remaining_credits, is_active FROM api_keys WHERE key_hash = ?')
     .bind(keyHash)
-    .first();
+    .first<{ id: string; remaining_credits: number; is_active: number }>();
 
+  if (!record) {
+    return { ok: false, errorCode: 'invalid' };
+  }
+  if (!record.is_active) {
+    return { ok: false, errorCode: 'inactive' };
+  }
   return {
-    ok: true,
-    apiKeyId: (updated?.id as string | undefined) ?? null,
-    remainingCredits:
-      typeof updated?.remaining_credits === 'number' ? (updated.remaining_credits as number) : null,
+    ok: false,
+    errorCode: 'insufficient_credits',
+    remainingCredits: record.remaining_credits,
   };
 }
 
@@ -76,7 +75,7 @@ export async function verifyApiKey(
   const record = await db
     .prepare('SELECT id, remaining_credits, is_active FROM api_keys WHERE key_hash = ?')
     .bind(keyHash)
-    .first();
+    .first<{ id: string; remaining_credits: number; is_active: number }>();
 
   if (!record) {
     return { ok: false, errorCode: 'invalid' };
@@ -87,9 +86,8 @@ export async function verifyApiKey(
 
   return {
     ok: true,
-    apiKeyId: (record.id as string | undefined) ?? null,
-    remainingCredits:
-      typeof record.remaining_credits === 'number' ? (record.remaining_credits as number) : null,
+    apiKeyId: record.id,
+    remainingCredits: record.remaining_credits,
   };
 }
 
@@ -102,42 +100,40 @@ export async function consumeApiKeyById(
     return { ok: false, errorCode: 'invalid' };
   }
 
-  const update = await db
+  // Use RETURNING clause to get updated values in a single query
+  const result = await db
     .prepare(
-      'UPDATE api_keys SET remaining_credits = remaining_credits - 1, last_used_at = ? WHERE id = ? AND is_active = 1 AND remaining_credits > 0',
+      `UPDATE api_keys
+       SET remaining_credits = remaining_credits - 1, last_used_at = ?
+       WHERE id = ? AND is_active = 1 AND remaining_credits > 0
+       RETURNING id, remaining_credits`,
     )
     .bind(now, apiKeyId)
-    .run();
+    .first<{ id: string; remaining_credits: number }>();
 
-  if (update.meta.changes === 0) {
-    const record = await db
-      .prepare('SELECT id, remaining_credits, is_active FROM api_keys WHERE id = ?')
-      .bind(apiKeyId)
-      .first();
-
-    if (!record) {
-      return { ok: false, errorCode: 'invalid' };
-    }
-    if (!record.is_active) {
-      return { ok: false, errorCode: 'inactive' };
-    }
+  if (result) {
     return {
-      ok: false,
-      errorCode: 'insufficient_credits',
-      remainingCredits:
-        typeof record.remaining_credits === 'number' ? record.remaining_credits : null,
+      ok: true,
+      apiKeyId: result.id,
+      remainingCredits: result.remaining_credits,
     };
   }
 
-  const updated = await db
-    .prepare('SELECT id, remaining_credits FROM api_keys WHERE id = ?')
+  // Key didn't match update conditions - check reason
+  const record = await db
+    .prepare('SELECT id, remaining_credits, is_active FROM api_keys WHERE id = ?')
     .bind(apiKeyId)
-    .first();
+    .first<{ id: string; remaining_credits: number; is_active: number }>();
 
+  if (!record) {
+    return { ok: false, errorCode: 'invalid' };
+  }
+  if (!record.is_active) {
+    return { ok: false, errorCode: 'inactive' };
+  }
   return {
-    ok: true,
-    apiKeyId: (updated?.id as string | undefined) ?? null,
-    remainingCredits:
-      typeof updated?.remaining_credits === 'number' ? (updated.remaining_credits as number) : null,
+    ok: false,
+    errorCode: 'insufficient_credits',
+    remainingCredits: record.remaining_credits,
   };
 }
