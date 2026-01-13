@@ -29,6 +29,7 @@ export async function getUsageSummary(
   params: { apiKeyId?: string | null; from: number; to: number },
 ): Promise<UsageSummary> {
   const { apiKeyId, from, to } = params;
+  const values = apiKeyId ? [apiKeyId, from, to] : [from, to];
   const where = apiKeyId
     ? 'WHERE api_key_id = ? AND created_at BETWEEN ? AND ?'
     : 'WHERE created_at BETWEEN ? AND ?';
@@ -44,7 +45,8 @@ export async function getUsageSummary(
      FROM scrape_logs ${where}`,
   );
 
-  const bound = apiKeyId ? statement.bind(apiKeyId, from, to) : statement.bind(from, to);
+  // Use Reflect.apply to avoid 'Illegal invocation' error
+  const bound = Reflect.apply(statement.bind, statement, values);
   const record = (await bound.first()) as {
     total?: number;
     success?: number;
@@ -71,6 +73,7 @@ export async function getUsageSeries(
   params: { apiKeyId?: string | null; from: number; to: number },
 ): Promise<UsageSeriesEntry[]> {
   const { apiKeyId, from, to } = params;
+  const values = apiKeyId ? [apiKeyId, from, to] : [from, to];
   const where = apiKeyId
     ? 'WHERE api_key_id = ? AND created_at BETWEEN ? AND ?'
     : 'WHERE created_at BETWEEN ? AND ?';
@@ -86,7 +89,8 @@ export async function getUsageSeries(
      LIMIT 30`,
   );
 
-  const bound = apiKeyId ? statement.bind(apiKeyId, from, to) : statement.bind(from, to);
+  // Use Reflect.apply to avoid 'Illegal invocation' error
+  const bound = Reflect.apply(statement.bind, statement, values);
   const result = await bound.all();
   return (result.results as UsageSeriesEntry[]) ?? [];
 }
@@ -97,13 +101,16 @@ export async function getRecentLogs(
 ): Promise<UsageLogEntry[]> {
   const { apiKeyId, from, to, limit = 50 } = params;
   const capped = Math.max(1, Math.min(limit, 100));
+  const values = apiKeyId ? [apiKeyId, from, to] : [from, to];
   const where = apiKeyId
     ? 'WHERE api_key_id = ? AND created_at BETWEEN ? AND ?'
     : 'WHERE created_at BETWEEN ? AND ?';
   const statement = db.prepare(
     `SELECT id, url, status, token_usage, latency_ms, created_at FROM scrape_logs ${where} ORDER BY created_at DESC LIMIT ${capped}`,
   );
-  const bound = apiKeyId ? statement.bind(apiKeyId, from, to) : statement.bind(from, to);
+
+  // Use Reflect.apply to avoid 'Illegal invocation' error
+  const bound = Reflect.apply(statement.bind, statement, values);
   const result = await bound.all();
   return (result.results as UsageLogEntry[]) ?? [];
 }
@@ -114,13 +121,16 @@ export async function getUsageExport(
 ): Promise<UsageLogEntry[]> {
   const { apiKeyId, from, to, limit } = params;
   const capped = Math.max(1, Math.min(limit, 5000));
+  const values = apiKeyId ? [apiKeyId, from, to] : [from, to];
   const where = apiKeyId
     ? 'WHERE api_key_id = ? AND created_at BETWEEN ? AND ?'
     : 'WHERE created_at BETWEEN ? AND ?';
   const statement = db.prepare(
     `SELECT id, url, status, token_usage, latency_ms, created_at FROM scrape_logs ${where} ORDER BY created_at DESC LIMIT ${capped}`,
   );
-  const bound = apiKeyId ? statement.bind(apiKeyId, from, to) : statement.bind(from, to);
+
+  // Use Reflect.apply to avoid 'Illegal invocation' error
+  const bound = Reflect.apply(statement.bind, statement, values);
   const result = await bound.all();
   return (result.results as UsageLogEntry[]) ?? [];
 }
