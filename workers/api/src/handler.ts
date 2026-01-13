@@ -52,7 +52,7 @@ export async function handleRequest(
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  const requestId = (deps.uuid ?? crypto.randomUUID)();
+  const requestId = crypto.randomUUID();
 
   // Health check - no auth required
   if (request.method === 'GET' && normalizedPath === '/health') {
