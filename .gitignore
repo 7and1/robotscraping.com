@@ -40,7 +40,9 @@ yarn-error.log*
 
 # Cloudflare
 .wrangler/
-wrangler.toml
+workers/api/wrangler.toml
+apps/web/.env.local
+apps/web/.env.production.local
 
 # Misc
 .cache/

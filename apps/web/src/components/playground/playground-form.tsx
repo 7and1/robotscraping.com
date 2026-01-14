@@ -359,6 +359,7 @@ console.log(data);`;
                     key={preset.id}
                     onClick={() => applyPreset(preset)}
                     role="option"
+                    aria-selected="false"
                     className="w-full rounded-lg px-3 py-2 text-left text-xs text-white/70 transition hover:bg-white/10 hover:text-neon focus:outline-none focus:bg-white/10"
                   >
                     {preset.label}
@@ -413,7 +414,7 @@ console.log(data);`;
           />
           {fields && !isValidJsonArray(fields) && (
             <p id="fields-error" className="text-xs text-laser" role="alert">
-              Fields must be a valid JSON array (e.g., ["title", "price"])
+              Fields must be a valid JSON array (e.g., [&quot;title&quot;, &quot;price&quot;])
             </p>
           )}
         </div>

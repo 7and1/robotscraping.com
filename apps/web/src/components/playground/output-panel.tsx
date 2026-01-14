@@ -96,7 +96,7 @@ export function OutputPanel({ result }: OutputPanelProps) {
           aria-label="JSON output content. Press Ctrl+C to copy."
         >
           {isEmpty ? (
-            <span className="text-white/30">// Waiting for extraction signal...</span>
+            <span className="text-white/30">{`// Waiting for extraction signal...`}</span>
           ) : (
             result
           )}
