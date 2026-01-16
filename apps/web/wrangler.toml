@@ -1,7 +1,0 @@
-name = "robot-scraping-web"
-compatibility_date = "2024-10-01"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
-
-[vars]
-NEXT_PUBLIC_API_URL = "https://robot-scraping-core.7and1.workers.dev"
