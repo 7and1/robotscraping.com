@@ -11,6 +11,8 @@ dist/
 .env
 .env.local
 .env.*.local
+workers/api/.env
+apps/web/.env
 
 # OS
 .DS_Store

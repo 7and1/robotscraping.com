@@ -1,8 +1,8 @@
 import { safeJsonParse } from '../lib/parse';
-import type { ExtractResult } from '../types';
+import type { ExtractResult, Env } from '../types';
 
 export interface ExtractOptions {
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'openrouter';
   model: string;
   apiKey: string;
   content: string;
@@ -10,9 +10,18 @@ export interface ExtractOptions {
   schema?: Record<string, unknown>;
   instructions?: string;
   baseUrl?: string;
+  fallbackModels?: string[];
+  fallbackKeys?: string[];
 }
 
+// Key rotation index for OpenRouter
+let keyIndex = 0;
+
 export async function extractWithLLM(options: ExtractOptions): Promise<ExtractResult> {
+  if (options.provider === 'openrouter') {
+    return extractWithOpenRouter(options);
+  }
+
   const systemPrompt = buildSystemPrompt(options.fields, options.schema, options.instructions);
   const userPrompt = buildUserPrompt(options.content, options.fields, options.schema);
 
@@ -32,6 +41,89 @@ export async function extractWithLLM(options: ExtractOptions): Promise<ExtractRe
     systemPrompt,
     userPrompt,
   });
+}
+
+async function extractWithOpenRouter(options: ExtractOptions): Promise<ExtractResult> {
+  const systemPrompt = buildSystemPrompt(options.fields, options.schema, options.instructions);
+  const userPrompt = buildUserPrompt(options.content, options.fields, options.schema);
+
+  // Prepare keys for rotation
+  const keys = options.fallbackKeys || [];
+  if (options.apiKey) keys.unshift(options.apiKey);
+
+  // Prepare models for fallback
+  const models = [options.model, ...(options.fallbackModels || [])];
+
+  // Try each key/model combination
+  for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+    const model = models[modelIdx];
+
+    for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
+      const apiKey = keys[keyIdx];
+
+      try {
+        const result = await callOpenRouter({
+          model,
+          apiKey,
+          systemPrompt,
+          userPrompt,
+        });
+        return result;
+      } catch (error) {
+        const isLast = modelIdx === models.length - 1 && keyIdx === keys.length - 1;
+        if (!isLast) continue; // Try next key/model
+        throw error;
+      }
+    }
+  }
+
+  throw new Error('OpenRouter: All keys and models failed');
+}
+
+async function callOpenRouter(params: {
+  model: string;
+  apiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<ExtractResult> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${params.apiKey}`,
+      'HTTP-Referer': 'https://robotscraping.com',
+      'X-Title': 'RobotScraping.com',
+    },
+    body: JSON.stringify({
+      model: params.model,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0,
+      max_tokens: 4096,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`OpenRouter error: ${response.status} ${errorBody}`);
+  }
+
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { total_tokens?: number };
+  };
+
+  const raw = json.choices?.[0]?.message?.content ?? '{}';
+  const parsed = safeJsonParse(raw);
+
+  return {
+    data: parsed.data,
+    usage: json.usage?.total_tokens ?? 0,
+    raw,
+  };
 }
 
 function buildSystemPrompt(
@@ -73,7 +165,6 @@ async function extractWithOpenAI(params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<ExtractResult> {
-  // Dynamic import to avoid module load issues in Cloudflare Workers
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey: params.apiKey, baseURL: params.baseUrl });
 
@@ -112,7 +203,7 @@ async function extractWithAnthropic(params: {
     },
     body: JSON.stringify({
       model: params.model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       temperature: 0,
       system: params.systemPrompt,
       messages: [
@@ -143,4 +234,25 @@ async function extractWithAnthropic(params: {
     usage,
     raw,
   };
+}
+
+// Get OpenRouter keys from env with rotation
+export function getOpenRouterKeys(env: Env): string[] {
+  const keys: string[] = [];
+  if (env.OPENROUTER_API_KEY_1) keys.push(env.OPENROUTER_API_KEY_1);
+  if (env.OPENROUTER_API_KEY_2) keys.push(env.OPENROUTER_API_KEY_2);
+  if (env.OPENROUTER_API_KEY_3) keys.push(env.OPENROUTER_API_KEY_3);
+  return keys;
+}
+
+// Get OpenRouter models with fallback
+export function getOpenRouterModels(env: Env): {
+  primary: string;
+  fallbacks: string[];
+} {
+  const primary = env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+  const fallbacks: string[] = [];
+  if (env.OPENROUTER_FALLBACK_MODEL_1) fallbacks.push(env.OPENROUTER_FALLBACK_MODEL_1);
+  if (env.OPENROUTER_FALLBACK_MODEL_2) fallbacks.push(env.OPENROUTER_FALLBACK_MODEL_2);
+  return { primary, fallbacks };
 }

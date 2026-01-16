@@ -5,6 +5,7 @@ import { hashIdempotencyKey } from '../lib/crypto';
 import { scrapePage } from '../services/browser';
 import { extractWithLLM } from '../services/extract';
 import { consumeApiKey, verifyApiKey } from '../services/auth';
+import { createAnonScope, getDayKey, incrementUsage, DAILY_LIMITS } from '../services/quota';
 import { logEvent, logRequest, storeArtifacts } from '../services/storage';
 import { resolveAiConfig } from '../services/config';
 import { createJob } from '../services/jobs';
@@ -444,13 +445,15 @@ async function handleSyncExtract(
       );
     }
 
-    const { provider, model, apiKey, baseUrl } = resolveAiConfig(env);
+    const { provider, model, apiKey, baseUrl, fallbackModels, fallbackKeys } = resolveAiConfig(env);
 
     extractResult = await extractor({
       provider,
       model,
       apiKey,
       baseUrl,
+      fallbackModels,
+      fallbackKeys,
       content: scrapeResult.content,
       fields: extractRequest.fields,
       schema: extractRequest.schema,
@@ -824,14 +827,28 @@ async function authorize(
   | { ok: true; apiKeyId?: string | null; remainingCredits?: number | null }
   | { ok: false; status: number; errorCode?: string }
 > {
-  const allowAnon = env.ALLOW_ANON === 'true';
-  if (allowAnon) {
-    return { ok: true, apiKeyId: null, remainingCredits: null };
+  const allowAnon = env.ALLOW_ANON !== 'false';
+  const apiKey = request.headers.get('x-api-key');
+  const now = (deps.now ?? Date.now)();
+
+  if (!apiKey && allowAnon) {
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip =
+      request.headers.get('cf-connecting-ip') ||
+      (forwarded ? forwarded.split(',')[0]?.trim() : null) ||
+      null;
+    const scope = await createAnonScope(ip, request.headers.get('user-agent'));
+    const day = getDayKey(now);
+    const limit = DAILY_LIMITS.anonymous;
+    const usage = await incrementUsage(env.DB, scope, 1, limit, day, now);
+    if (!usage.allowed) {
+      return { ok: false, status: 402, errorCode: 'insufficient_credits' };
+    }
+    return { ok: true, apiKeyId: null, remainingCredits: usage.remaining };
   }
 
-  const apiKey = request.headers.get('x-api-key');
   const result = consumeCredits
-    ? await consumeApiKey(env.DB, apiKey, (deps.now ?? Date.now)())
+    ? await consumeApiKey(env.DB, apiKey, now)
     : await verifyApiKey(env.DB, apiKey);
 
   if (!result.ok) {

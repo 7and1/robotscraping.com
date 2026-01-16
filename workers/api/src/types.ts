@@ -3,12 +3,27 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   TASK_QUEUE: Queue;
-  OPENAI_API_KEY: string;
-  ANTHROPIC_API_KEY?: string;
+
+  // OpenRouter (Primary - Recommended)
+  OPENROUTER_API_KEY_1?: string;
+  OPENROUTER_API_KEY_2?: string;
+  OPENROUTER_API_KEY_3?: string;
+  OPENROUTER_MODEL?: string;
+  OPENROUTER_FALLBACK_MODEL_1?: string;
+  OPENROUTER_FALLBACK_MODEL_2?: string;
+
+  // Legacy: OpenAI
+  OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
-  AI_PROVIDER?: string;
   OPENAI_MODEL?: string;
+
+  // Legacy: Anthropic
+  ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
+
+  // AI Provider Selection
+  AI_PROVIDER?: 'openai' | 'anthropic' | 'openrouter';
+
   MAX_CONTENT_CHARS?: string;
   BROWSER_TIMEOUT_MS?: string;
   CORS_ORIGIN?: string;
@@ -28,6 +43,15 @@ export interface Env {
   PROXY_GRID_SECRET?: string;
   PROXY_GRID_ALLOWLIST?: string;
   PROXY_GRID_FORCE?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  GITHUB_REDIRECT_URL?: string;
+  GITHUB_SCOPES?: string;
+  AUTH_SUCCESS_REDIRECT?: string;
+  SESSION_COOKIE_NAME?: string;
+  SESSION_COOKIE_DOMAIN?: string;
+  SESSION_COOKIE_SECURE?: string;
+  SESSION_TTL_HOURS?: string;
 }
 
 export interface ExtractRequest {
@@ -168,6 +192,8 @@ export interface HandlerDeps {
     model: string;
     apiKey: string;
     baseUrl?: string;
+    fallbackModels?: string[];
+    fallbackKeys?: string[];
     content: string;
     fields?: string[];
     schema?: Record<string, unknown>;
