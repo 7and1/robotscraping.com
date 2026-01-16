@@ -124,6 +124,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Create wrangler.toml from example
+        run: |
+          cp workers/api/wrangler.toml.example workers/api/wrangler.toml
+          sed -i 's/YOUR_DATABASE_ID_HERE/${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}/g' workers/api/wrangler.toml
+
       - name: Save previous version
         if: github.event.inputs.rollback != 'true'
         run: |
@@ -179,6 +184,9 @@ jobs:
         with:
           name: frontend-build
           path: apps/web/.vercel/output/static
+
+      - name: Create wrangler.toml from example
+        run: cp apps/web/wrangler.toml.example apps/web/wrangler.toml
 
       - name: Deploy to Cloudflare Pages
         id: deploy
