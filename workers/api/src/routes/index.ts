@@ -4,6 +4,7 @@ export { handleSchedules } from './schedules';
 export { handleUsage } from './usage';
 export { handleWebhookTest } from './webhook';
 export { handleBatch } from './batch';
+export { handleAuth } from './auth';
 
 import { jsonResponse } from '../lib/http';
 import type { Env } from '../types';

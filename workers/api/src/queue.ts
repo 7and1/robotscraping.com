@@ -22,6 +22,15 @@ import {
 } from './services/proxy-grid';
 import type { Env, JobMessage } from './types';
 
+function getWebhookSecret(
+  secret: string | null | undefined,
+  envSecret: string | undefined,
+): string {
+  if (secret) return secret;
+  if (envSecret) return envSecret;
+  throw new Error('Webhook URL requires a webhook_secret for signature verification.');
+}
+
 export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Promise<void> {
   for (const message of batch.messages) {
     const payload = message.body;
@@ -99,7 +108,7 @@ export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Pr
                     cacheHit: true,
                   },
                 },
-                payload.webhookSecret || env.WEBHOOK_SECRET || 'default-secret',
+                payload.webhookSecret || env.WEBHOOK_SECRET,
               );
             }
 
@@ -217,7 +226,7 @@ export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Pr
               status: 'blocked',
               error: 'blocked',
             },
-            payload.webhookSecret || env.WEBHOOK_SECRET || 'default-secret',
+            getWebhookSecret(payload.webhookSecret, env.WEBHOOK_SECRET),
           );
         }
 
@@ -328,7 +337,7 @@ export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Pr
               latencyMs,
             },
           },
-          payload.webhookSecret || env.WEBHOOK_SECRET || 'default-secret',
+          getWebhookSecret(payload.webhookSecret, env.WEBHOOK_SECRET),
         );
       }
 
@@ -366,7 +375,7 @@ export async function handleQueue(batch: MessageBatch<JobMessage>, env: Env): Pr
             status: 'failed',
             error: (error as Error).message,
           },
-          payload.webhookSecret || env.WEBHOOK_SECRET || 'default-secret',
+          getWebhookSecret(payload.webhookSecret, env.WEBHOOK_SECRET),
         );
       }
 

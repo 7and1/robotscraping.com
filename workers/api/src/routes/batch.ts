@@ -1,7 +1,6 @@
 import { jsonResponse, textResponse } from '../lib/http';
 import { parseExtractRequest } from '../lib/validate';
 import { consumeApiKey, verifyApiKey } from '../services/auth';
-import { createJob } from '../services/jobs';
 import { logEvent } from '../services/storage';
 import type { Env, ExtractRequest, HandlerDeps } from '../types';
 
@@ -172,28 +171,50 @@ export async function handleBatch(
   const webhookUrl = webhook_url || null;
   const webhookSecret = webhook_secret || null;
 
-  // Create jobs for each URL
+  // Create jobs for each URL using D1 batch statements
   const jobIds: string[] = [];
   const prefix = apiPrefix(url.pathname);
   const now = deps.now ? deps.now() : Date.now();
 
+  // Prepare all job insert statements for batch execution
+  const jobStatements: D1PreparedStatement[] = [];
+  const queueMessages: Array<{
+    jobId: string;
+    apiKeyId: string | null;
+    url: string;
+    fields?: string[];
+    schema?: Record<string, unknown>;
+    instructions?: string;
+    webhookUrl?: string | null;
+    webhookSecret?: string | null;
+    options?: ExtractRequest['options'];
+  }> = [];
+
   for (const targetUrl of urls) {
     const jobId = crypto.randomUUID();
+    jobIds.push(jobId);
 
-    await createJob(env.DB, {
-      id: jobId,
-      apiKeyId: auth.apiKeyId ?? null,
-      url: targetUrl,
-      fields,
-      schema,
-      instructions,
-      options,
-      webhookUrl,
-      webhookSecret,
-      createdAt: now,
-    });
+    // Build insert statement for this job
+    jobStatements.push(
+      env.DB.prepare(
+        'INSERT INTO jobs (id, api_key_id, url, status, fields_requested, schema_json, instructions, options_json, webhook_url, webhook_secret, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).bind(
+        jobId,
+        auth.apiKeyId ?? null,
+        targetUrl,
+        'queued',
+        fields ? JSON.stringify(fields) : null,
+        schema ? JSON.stringify(schema) : null,
+        instructions ?? null,
+        options ? JSON.stringify(options) : null,
+        webhookUrl ?? null,
+        webhookSecret ?? null,
+        now,
+      ),
+    );
 
-    await env.TASK_QUEUE.send({
+    // Prepare queue message for later sending
+    queueMessages.push({
       jobId,
       apiKeyId: auth.apiKeyId ?? null,
       url: targetUrl,
@@ -204,8 +225,26 @@ export async function handleBatch(
       webhookSecret,
       options,
     });
+  }
 
-    jobIds.push(jobId);
+  // Execute all job inserts in a single D1 batch operation
+  try {
+    await env.DB.batch(jobStatements);
+  } catch (error) {
+    console.error('Failed to create batch jobs:', error);
+    return jsonResponse(
+      {
+        success: false,
+        error: { code: 'internal_error', message: 'Failed to create batch jobs.' },
+      },
+      500,
+      corsHeaders,
+    );
+  }
+
+  // Send all messages to the task queue
+  for (const message of queueMessages) {
+    await env.TASK_QUEUE.send(message);
   }
 
   // Log batch event
@@ -242,12 +281,10 @@ async function authorize(
   | { ok: true; apiKeyId?: string | null; remainingCredits?: number | null }
   | { ok: false; status: number; errorCode?: string }
 > {
-  const allowAnon = env.ALLOW_ANON === 'true';
-  if (allowAnon) {
-    return { ok: true, apiKeyId: null, remainingCredits: null };
-  }
-
   const apiKey = request.headers.get('x-api-key');
+  if (!apiKey) {
+    return { ok: false, status: 401, errorCode: 'missing' };
+  }
 
   // For batch requests, verify credits are sufficient
   const result = await verifyApiKey(env.DB, apiKey);
@@ -262,7 +299,12 @@ async function authorize(
   }
 
   // Consume credits for batch
-  const consumeResult = await consumeApiKey(env.DB, apiKey, deps.now ? deps.now() : Date.now());
+  const consumeResult = await consumeApiKey(
+    env.DB,
+    apiKey,
+    deps.now ? deps.now() : Date.now(),
+    requestCount,
+  );
   if (!consumeResult.ok) {
     return { ok: false, status: 401, errorCode: consumeResult.errorCode };
   }

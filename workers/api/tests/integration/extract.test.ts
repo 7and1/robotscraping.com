@@ -19,6 +19,15 @@ vi.mock('../../src/lib/crypto', () => ({
   },
 }));
 
+vi.mock('../../src/services/quota', () => ({
+  DAILY_LIMITS: { anonymous: 5, github: 50, pro: 1000 },
+  resolveTier: (raw: string | null | undefined) => (raw === 'pro' ? 'pro' : 'github'),
+  getDayKey: () => '2026-01-15',
+  createAnonScope: async () => 'anon:test',
+  incrementUsage: async () => ({ allowed: true, remaining: 49, count: 1 }),
+  getRemainingForScope: async () => 49,
+}));
+
 // Mock dependencies
 const mockScrape = vi.fn();
 const mockExtract = vi.fn();
@@ -98,7 +107,8 @@ describe('POST /extract integration', () => {
     mockDbRun.mockResolvedValue({ meta: { changes: 1 } });
     mockDbFirst.mockResolvedValue({
       id: 'key-123',
-      remaining_credits: 99,
+      user_id: 'user-1',
+      tier: 'github',
       is_active: 1,
     });
   });

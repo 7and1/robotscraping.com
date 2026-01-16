@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// import { DocsStructuredData } from '../structured-data';
-// import { CodeBlock } from '../../components/ui/code-block';
+import { CodeBlock } from '../../components/ui/code-block';
 
 export const metadata: Metadata = {
   title: 'API Documentation | RobotScraping.com',
@@ -31,7 +30,6 @@ export const metadata: Metadata = {
 export default function DocsPage() {
   return (
     <div>
-      {/* <DocsStructuredData /> */}
       <main
         id="main-content"
         className="min-h-screen bg-hero-gradient bg-grid px-6 py-10 text-white"
@@ -59,10 +57,50 @@ export default function DocsPage() {
               <p>Base URL: https://api.robotscraping.com</p>
               <p>Authenticate with the x-api-key header.</p>
             </div>
-            {/* <CodeBlock language="bash">{`curl -X POST https://api.robotscraping.com/extract \\ */}
-            {/*   -H "content-type: application/json" \\ */}
-            {/*   -H "x-api-key: YOUR_KEY" \\ */}
-            {/*   -d '{"url":"https://example.com","fields":["title","price"]}'`}</CodeBlock> */}
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="mb-2 text-xs text-white/50">cURL</p>
+                <CodeBlock language="bash">{`curl -X POST https://api.robotscraping.com/extract \\
+  -H "content-type: application/json" \\
+  -H "x-api-key: YOUR_KEY" \\
+  -d '{"url":"https://example.com","fields":["title","price"]}'`}</CodeBlock>
+              </div>
+              <div>
+                <p className="mb-2 text-xs text-white/50">Python</p>
+                <CodeBlock language="python">{`import requests
+
+response = requests.post(
+    "https://api.robotscraping.com/extract",
+    headers={
+        "Content-Type": "application/json",
+        "x-api-key": "YOUR_KEY"
+    },
+    json={
+        "url": "https://example.com",
+        "fields": ["title", "price"]
+    }
+)
+
+print(response.json())`}</CodeBlock>
+              </div>
+              <div>
+                <p className="mb-2 text-xs text-white/50">Node.js</p>
+                <CodeBlock language="javascript">{`const response = await fetch('https://api.robotscraping.com/extract', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': 'YOUR_KEY'
+  },
+  body: JSON.stringify({
+    url: 'https://example.com',
+    fields: ['title', 'price']
+  })
+});
+
+const data = await response.json();
+console.log(data);`}</CodeBlock>
+              </div>
+            </div>
           </section>
 
           <section className="glass rounded-2xl p-6">
@@ -70,25 +108,25 @@ export default function DocsPage() {
             <p className="mt-2 text-sm text-white/70">
               Render a page, distill content, and extract structured JSON using an LLM.
             </p>
-            {/* <CodeBlock language="json">{`{ */}
-            {/*   "url": "https://example.com/product/123", */}
-            {/*   "fields": ["product_name", "price"], */}
-            {/*   "instructions": "Prefer visible price", */}
-            {/*   "options": { */}
-            {/*     "screenshot": false, */}
-            {/*     "storeContent": true, */}
-            {/*     "waitUntil": "domcontentloaded", */}
-            {/*     "timeoutMs": 15000, */}
-            {/*     "proxy": { */}
-            {/*       "type": "proxy_grid", */}
-            {/*       "country": "us" */}
-            {/*     }, */}
-            {/*     "headers": { */}
-            {/*       "User-Agent": "Mozilla/5.0...", */}
-            {/*       "Accept-Language": "en-US" */}
-            {/*     } */}
-            {/*   } */}
-            {/* }`}</CodeBlock> */}
+            <CodeBlock language="json">{`{
+  "url": "https://example.com/product/123",
+  "fields": ["product_name", "price"],
+  "instructions": "Prefer visible price",
+  "options": {
+    "screenshot": false,
+    "storeContent": true,
+    "waitUntil": "domcontentloaded",
+    "timeoutMs": 15000,
+    "proxy": {
+      "type": "proxy_grid",
+      "country": "us"
+    },
+    "headers": {
+      "User-Agent": "Mozilla/5.0...",
+      "Accept-Language": "en-US"
+    }
+  }
+}`}</CodeBlock>
             <p className="mt-4 text-xs text-white/50">
               Available proxy types: browser, proxy_grid, residential, datacenter
             </p>

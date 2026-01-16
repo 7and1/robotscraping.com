@@ -1,11 +1,71 @@
--- Schema version: 2026-01-12 (v1.2) — adds webhook_dead_letters, idempotency_entries
+-- Schema version: 2026-01-15 (v1.3) — adds auth users/sessions, oauth states, daily usage, api_keys metadata
+-- Previous: 2026-01-12 (v1.2) — adds webhook_dead_letters, idempotency_entries
 -- Increment version/date with each DDL change; newest entry stays at top.
+
+-- Auth users (GitHub-backed)
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  github_id TEXT UNIQUE NOT NULL,
+  github_login TEXT NOT NULL,
+  github_name TEXT,
+  github_email TEXT,
+  github_avatar_url TEXT,
+  tier TEXT NOT NULL DEFAULT 'github',
+  created_at INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id);
+CREATE INDEX IF NOT EXISTS idx_users_login ON users(github_login);
+
+-- OAuth state storage (short-lived)
+CREATE TABLE IF NOT EXISTS oauth_states (
+  id TEXT PRIMARY KEY,
+  state_hash TEXT UNIQUE NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
+
+-- Auth sessions (cookie-backed)
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  initial_key TEXT,
+  initial_key_expires_at INTEGER,
+  initial_key_consumed INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+-- Daily usage tracking for quota enforcement
+CREATE TABLE IF NOT EXISTS daily_usage (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_usage_scope_day ON daily_usage(scope, day);
+CREATE INDEX IF NOT EXISTS idx_daily_usage_expires ON daily_usage(scope, day);
 
 -- API key management (store hashes, never raw keys)
 CREATE TABLE IF NOT EXISTS api_keys (
   id TEXT PRIMARY KEY,
+  user_id TEXT,
   key_hash TEXT UNIQUE NOT NULL,
+  key_prefix TEXT,
+  name TEXT,
   user_email TEXT,
+  tier TEXT DEFAULT 'github',
   remaining_credits INTEGER DEFAULT 0,
   is_active INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
@@ -28,11 +88,13 @@ CREATE TABLE IF NOT EXISTS scrape_logs (
   snapshot_key TEXT,
   content_key TEXT,
   blocked INTEGER DEFAULT 0,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  retention_until INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_logs_created ON scrape_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_logs_api_key ON scrape_logs(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_logs_api_key_created ON scrape_logs(api_key_id, created_at DESC);
 
 -- Async jobs
 CREATE TABLE IF NOT EXISTS jobs (
@@ -58,6 +120,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_api_key ON jobs(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_api_key_status ON jobs(api_key_id, status);
 
 -- Schedules (cron-based)
 CREATE TABLE IF NOT EXISTS schedules (
@@ -78,6 +141,7 @@ CREATE TABLE IF NOT EXISTS schedules (
 
 CREATE INDEX IF NOT EXISTS idx_schedules_active ON schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
+CREATE INDEX IF NOT EXISTS idx_schedules_next_run_status ON schedules(next_run_at, status);
 
 -- Cache entries
 CREATE TABLE IF NOT EXISTS cache_entries (
@@ -97,6 +161,7 @@ CREATE TABLE IF NOT EXISTS cache_entries (
 
 CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_entries(expires_at);
 CREATE INDEX IF NOT EXISTS idx_cache_url ON cache_entries(url);
+CREATE INDEX IF NOT EXISTS idx_cache_lookup ON cache_entries(cache_key, expires_at, result_path);
 
 -- Structured event logs
 CREATE TABLE IF NOT EXISTS event_logs (
@@ -106,7 +171,8 @@ CREATE TABLE IF NOT EXISTS event_logs (
   event_type TEXT,
   message TEXT,
   metadata_json TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  retention_until INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_logs_created ON event_logs(created_at);
@@ -138,3 +204,14 @@ CREATE TABLE IF NOT EXISTS webhook_dead_letters (
 
 CREATE INDEX IF NOT EXISTS idx_webhook_dl_job ON webhook_dead_letters(job_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_dl_failed_at ON webhook_dead_letters(failed_at);
+
+-- Rate limit entries for token-bucket rate limiting
+CREATE TABLE IF NOT EXISTS rate_limit_entries (
+  identifier TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  count INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (identifier, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limit_expires ON rate_limit_entries(window_start);

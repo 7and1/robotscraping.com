@@ -3,9 +3,22 @@ import { getDueSchedules, updateSchedule, computeNextRun } from './services/sche
 import { consumeApiKeyById } from './services/auth';
 import type { Env, JobMessage } from './types';
 import { sendWebhook } from './services/webhook';
+import { cleanupExpiredData } from './services/retention';
+
+function getWebhookSecret(
+  secret: string | null | undefined,
+  envSecret: string | undefined,
+): string {
+  if (secret) return secret;
+  if (envSecret) return envSecret;
+  throw new Error('Webhook URL requires a webhook_secret for signature verification.');
+}
 
 export async function handleCron(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
+
+  ctx.waitUntil(cleanupExpiredData(env.DB, now));
+
   const schedules = await getDueSchedules(env.DB, now, 25);
 
   for (const schedule of schedules) {
@@ -62,7 +75,7 @@ export async function handleCron(env: Env, ctx: ExecutionContext): Promise<void>
               status: 'failed',
               error: credit.errorCode ?? 'insufficient_credits',
             },
-            schedule.webhook_secret || env.WEBHOOK_SECRET || 'default-secret',
+            getWebhookSecret(schedule.webhook_secret, env.WEBHOOK_SECRET),
           ),
         );
       }

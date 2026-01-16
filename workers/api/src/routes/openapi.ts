@@ -659,7 +659,11 @@ export const openApiSpec = {
               tokens: { type: 'integer' },
               blocked: { type: 'boolean' },
               contentChars: { type: 'integer' },
-              remainingCredits: { type: 'integer', nullable: true },
+              remainingCredits: {
+                type: 'integer',
+                nullable: true,
+                description: 'Remaining daily requests for the current API key or anonymous scope.',
+              },
               cache: {
                 type: 'object',
                 properties: {

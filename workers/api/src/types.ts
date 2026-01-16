@@ -34,6 +34,7 @@ export interface Env {
   RATE_LIMIT_ENABLED?: string;
   RATE_LIMIT_REQUESTS?: string;
   RATE_LIMIT_WINDOW_MS?: string;
+  USE_D1_RATE_LIMIT?: string;
   MAX_REQUEST_SIZE_MB?: string;
   ENABLE_RATE_LIMIT_HEADERS?: string;
   CACHE_ENABLED?: string;

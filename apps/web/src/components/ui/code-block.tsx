@@ -42,7 +42,7 @@ export function CodeBlock({ children, className = '', language = 'bash' }: CodeB
         )}
       </button>
       <pre
-        className={`whitespace-pre-wrap rounded-xl border border-white/10 bg-black/60 p-4 font-mono text-xs text-neon/80 ${className}`}
+        className={`whitespace-pre-wrap rounded-xl border border-white/10 bg-black/60 p-4 font-mono text-xs ${language === 'python' || language === 'javascript' ? 'text-white/90' : 'text-neon/80'} ${className}`}
         tabIndex={0}
       >
         {children}

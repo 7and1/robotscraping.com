@@ -9,7 +9,7 @@ function createEnv(): Env {
       prepare: () => ({
         bind: () => ({
           run: async () => ({ meta: { changes: 1 } }),
-          first: async () => null,
+          first: async () => ({ count: 1 }),
         }),
       }),
     } as unknown as D1Database,

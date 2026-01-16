@@ -4,6 +4,15 @@ import { sendWebhook } from '../services/webhook';
 import { parseWebhookTest } from '../lib/validate';
 import type { Env } from '../types';
 
+function getWebhookSecret(
+  secret: string | null | undefined,
+  envSecret: string | undefined,
+): string {
+  if (secret) return secret;
+  if (envSecret) return envSecret;
+  throw new Error('Webhook URL requires a webhook_secret for signature verification.');
+}
+
 export async function handleWebhookTest(
   request: Request,
   env: Env,
@@ -46,7 +55,7 @@ export async function handleWebhookTest(
       status: 'completed',
       data: { message: 'Test webhook from RobotScraping.com' },
     },
-    secret || env.WEBHOOK_SECRET || 'default-secret',
+    getWebhookSecret(secret, env.WEBHOOK_SECRET),
   );
 
   return jsonResponse({ success: true }, 200, corsHeaders);

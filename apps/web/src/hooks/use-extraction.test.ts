@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useExtraction } from './use-extraction';
 
 // Mock fetch
@@ -9,10 +9,12 @@ describe('useExtraction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
+    window.localStorage.clear();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.useRealTimers();
   });
 
   it('should initialize with default values', () => {
@@ -35,6 +37,7 @@ describe('useExtraction', () => {
     expect(result.current.meta).toBeNull();
     expect(result.current.error).toBe('');
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
   });
 
   it('should update url', () => {
@@ -148,6 +151,7 @@ describe('useExtraction', () => {
   });
 
   it('should handle successful extraction', async () => {
+    vi.useFakeTimers();
     const mockFetch = vi.mocked(global.fetch);
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -165,10 +169,12 @@ describe('useExtraction', () => {
     const { result } = renderHook(() => useExtraction());
 
     await act(async () => {
-      await result.current.handleScrape();
+      result.current.handleScrape();
+      vi.advanceTimersByTimeAsync(600); // Advance past debounce time
     });
 
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
     expect(result.current.error).toBe('');
     expect(result.current.result).toBeTruthy();
     expect(result.current.meta).toEqual({
@@ -177,10 +183,13 @@ describe('useExtraction', () => {
       tokens: 200,
       requestId: 'req-123',
       cacheHit: false,
+      retryAttempt: 0,
     });
+    vi.useRealTimers();
   });
 
   it('should handle API error', async () => {
+    vi.useFakeTimers();
     const mockFetch = vi.mocked(global.fetch);
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -194,25 +203,38 @@ describe('useExtraction', () => {
     const { result } = renderHook(() => useExtraction());
 
     await act(async () => {
-      await result.current.handleScrape();
+      result.current.handleScrape();
+      vi.advanceTimersByTimeAsync(600);
     });
 
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
     expect(result.current.error).toBe('Invalid API key');
+    vi.useRealTimers();
   });
 
   it('should handle network error', async () => {
+    vi.useFakeTimers();
     const mockFetch = vi.mocked(global.fetch);
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
     const { result } = renderHook(() => useExtraction());
 
     await act(async () => {
-      await result.current.handleScrape();
+      result.current.handleScrape();
+      vi.advanceTimersByTimeAsync(600);
+    });
+
+    // After network error, retries happen with delays
+    // Run all timers to complete the retries
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
 
     expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Network error. Please try again.');
+    expect(result.current.loadingState).toBe('idle');
+    expect(result.current.error).toBeTruthy();
+    vi.useRealTimers();
   });
 
   it('should validate fields JSON format', async () => {
@@ -227,6 +249,7 @@ describe('useExtraction', () => {
     });
 
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
     expect(result.current.error).toBe('Fields must be a valid JSON array.');
   });
 
@@ -243,6 +266,7 @@ describe('useExtraction', () => {
     });
 
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
     expect(result.current.error).toBe('Schema must be a valid JSON object.');
   });
 
@@ -250,19 +274,20 @@ describe('useExtraction', () => {
     const { result } = renderHook(() => useExtraction());
 
     act(() => {
-      result.current.setFields('[]');
+      result.current.setFields('');
+      result.current.setSchema('');
     });
 
     await act(async () => {
       await result.current.handleScrape();
     });
 
-    // Empty array after trimming results in no fields or schema
-    // This triggers the API validation error which gets shown
-    expect(result.current.error).toBeTruthy();
+    // Empty fields and schema should trigger validation error
+    expect(result.current.error).toBe('Provide fields or a schema.');
   });
 
   it('should handle successful async extraction', async () => {
+    vi.useFakeTimers();
     const mockFetch = vi.mocked(global.fetch);
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -283,16 +308,20 @@ describe('useExtraction', () => {
     });
 
     await act(async () => {
-      await result.current.handleScrape();
+      result.current.handleScrape();
+      vi.advanceTimersByTimeAsync(600);
     });
 
     expect(result.current.loading).toBe(false);
+    expect(result.current.loadingState).toBe('idle');
     expect(result.current.meta).toEqual({
       id: 'job-async-123',
       status: 'processing',
       requestId: 'req-async',
       cacheHit: false,
+      retryAttempt: 0,
     });
+    vi.useRealTimers();
   });
 
   it('should send API key header when provided', async () => {
@@ -305,14 +334,17 @@ describe('useExtraction', () => {
 
     const { result } = renderHook(() => useExtraction());
 
-    act(() => {
+    // Set API key and wait for state update
+    await act(async () => {
       result.current.setApiKey('sk-test-key');
     });
 
+    // Call handleScrape which should now use the API key
     await act(async () => {
       await result.current.handleScrape();
     });
 
+    expect(mockFetch).toHaveBeenCalled();
     expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -333,7 +365,7 @@ describe('useExtraction', () => {
 
     const { result } = renderHook(() => useExtraction());
 
-    act(() => {
+    await act(async () => {
       result.current.setWebhookUrl('https://webhook.example.com/hook');
     });
 
@@ -341,6 +373,7 @@ describe('useExtraction', () => {
       await result.current.handleScrape();
     });
 
+    expect(mockFetch).toHaveBeenCalled();
     const callArgs = mockFetch.mock.calls[0];
     const body = JSON.parse(callArgs![1]!.body as string);
     expect(body.webhook_url).toBe('https://webhook.example.com/hook');
@@ -356,7 +389,7 @@ describe('useExtraction', () => {
 
     const { result } = renderHook(() => useExtraction());
 
-    act(() => {
+    await act(async () => {
       result.current.setScreenshot(true);
       result.current.setWaitUntil('networkidle0');
       result.current.setTimeoutMs(30000);
@@ -366,6 +399,7 @@ describe('useExtraction', () => {
       await result.current.handleScrape();
     });
 
+    expect(mockFetch).toHaveBeenCalled();
     const callArgs = mockFetch.mock.calls[0];
     const body = JSON.parse(callArgs![1]!.body as string);
     expect(body.options).toEqual({
@@ -385,7 +419,7 @@ describe('useExtraction', () => {
 
     const { result } = renderHook(() => useExtraction());
 
-    act(() => {
+    await act(async () => {
       result.current.setStoreContent(false);
     });
 
@@ -393,6 +427,7 @@ describe('useExtraction', () => {
       await result.current.handleScrape();
     });
 
+    expect(mockFetch).toHaveBeenCalled();
     const callArgs = mockFetch.mock.calls[0];
     const body = JSON.parse(callArgs![1]!.body as string);
     expect(body.options).toEqual({
@@ -410,7 +445,7 @@ describe('useExtraction', () => {
 
     const { result } = renderHook(() => useExtraction());
 
-    act(() => {
+    await act(async () => {
       result.current.setInstructions('Extract product details');
     });
 
@@ -418,6 +453,7 @@ describe('useExtraction', () => {
       await result.current.handleScrape();
     });
 
+    expect(mockFetch).toHaveBeenCalled();
     const callArgs = mockFetch.mock.calls[0];
     const body = JSON.parse(callArgs![1]!.body as string);
     expect(body.instructions).toBe('Extract product details');

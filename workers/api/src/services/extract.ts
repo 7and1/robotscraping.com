@@ -1,5 +1,10 @@
 import { safeJsonParse } from '../lib/parse';
 import type { ExtractResult, Env } from '../types';
+import {
+  getCircuitBreaker,
+  CircuitBreakerOpenError,
+  isRetryableWithCircuitBreaker,
+} from './circuit-breaker';
 
 export interface ExtractOptions {
   provider: 'openai' | 'anthropic' | 'openrouter';
@@ -86,44 +91,48 @@ async function callOpenRouter(params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<ExtractResult> {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${params.apiKey}`,
-      'HTTP-Referer': 'https://robotscraping.com',
-      'X-Title': 'RobotScraping.com',
-    },
-    body: JSON.stringify({
-      model: params.model,
-      messages: [
-        { role: 'system', content: params.systemPrompt },
-        { role: 'user', content: params.userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0,
-      max_tokens: 4096,
-    }),
+  const breaker = getCircuitBreaker('openrouter');
+
+  return breaker.execute(async () => {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${params.apiKey}`,
+        'HTTP-Referer': 'https://robotscraping.com',
+        'X-Title': 'RobotScraping.com',
+      },
+      body: JSON.stringify({
+        model: params.model,
+        messages: [
+          { role: 'system', content: params.systemPrompt },
+          { role: 'user', content: params.userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0,
+        max_tokens: 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`OpenRouter error: ${response.status} ${errorBody}`);
+    }
+
+    const json = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { total_tokens?: number };
+    };
+
+    const raw = json.choices?.[0]?.message?.content ?? '{}';
+    const parsed = safeJsonParse(raw);
+
+    return {
+      data: parsed.data,
+      usage: json.usage?.total_tokens ?? 0,
+      raw,
+    };
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`OpenRouter error: ${response.status} ${errorBody}`);
-  }
-
-  const json = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    usage?: { total_tokens?: number };
-  };
-
-  const raw = json.choices?.[0]?.message?.content ?? '{}';
-  const parsed = safeJsonParse(raw);
-
-  return {
-    data: parsed.data,
-    usage: json.usage?.total_tokens ?? 0,
-    raw,
-  };
 }
 
 function buildSystemPrompt(
@@ -165,27 +174,31 @@ async function extractWithOpenAI(params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<ExtractResult> {
-  const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({ apiKey: params.apiKey, baseURL: params.baseUrl });
+  const breaker = getCircuitBreaker('openai');
 
-  const response = await client.chat.completions.create({
-    model: params.model,
-    messages: [
-      { role: 'system', content: params.systemPrompt },
-      { role: 'user', content: params.userPrompt },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0,
+  return breaker.execute(async () => {
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({ apiKey: params.apiKey, baseURL: params.baseUrl });
+
+    const response = await client.chat.completions.create({
+      model: params.model,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0,
+    });
+
+    const raw = response.choices?.[0]?.message?.content ?? '{}';
+    const parsed = safeJsonParse(raw);
+
+    return {
+      data: parsed.data,
+      usage: response.usage?.total_tokens ?? 0,
+      raw,
+    };
   });
-
-  const raw = response.choices?.[0]?.message?.content ?? '{}';
-  const parsed = safeJsonParse(raw);
-
-  return {
-    data: parsed.data,
-    usage: response.usage?.total_tokens ?? 0,
-    raw,
-  };
 }
 
 async function extractWithAnthropic(params: {
@@ -194,46 +207,50 @@ async function extractWithAnthropic(params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<ExtractResult> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': params.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: params.model,
-      max_tokens: 4096,
-      temperature: 0,
-      system: params.systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: params.userPrompt }],
-        },
-      ],
-    }),
+  const breaker = getCircuitBreaker('anthropic');
+
+  return breaker.execute(async () => {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': params.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: params.model,
+        max_tokens: 4096,
+        temperature: 0,
+        system: params.systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: params.userPrompt }],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Anthropic error: ${response.status} ${errorBody}`);
+    }
+
+    const json = (await response.json()) as {
+      content?: { type: string; text: string }[];
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+
+    const raw = json.content?.[0]?.text ?? '{}';
+    const parsed = safeJsonParse(raw);
+    const usage = (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0);
+
+    return {
+      data: parsed.data,
+      usage,
+      raw,
+    };
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Anthropic error: ${response.status} ${errorBody}`);
-  }
-
-  const json = (await response.json()) as {
-    content?: { type: string; text: string }[];
-    usage?: { input_tokens?: number; output_tokens?: number };
-  };
-
-  const raw = json.content?.[0]?.text ?? '{}';
-  const parsed = safeJsonParse(raw);
-  const usage = (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0);
-
-  return {
-    data: parsed.data,
-    usage,
-    raw,
-  };
 }
 
 // Get OpenRouter keys from env with rotation

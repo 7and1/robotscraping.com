@@ -165,3 +165,16 @@ export async function updateSchedule(
   // Use Reflect.apply to avoid 'Illegal invocation' error with spread
   await Reflect.apply(statement.bind, statement, values).run();
 }
+
+export async function deleteSchedule(
+  db: D1Database,
+  scheduleId: string,
+  apiKeyId?: string | null,
+): Promise<boolean> {
+  const where = apiKeyId ? 'WHERE id = ? AND api_key_id = ?' : 'WHERE id = ?';
+  const statement = db.prepare(`DELETE FROM schedules ${where}`);
+  const result = apiKeyId
+    ? await statement.bind(scheduleId, apiKeyId).run()
+    : await statement.bind(scheduleId).run();
+  return (result.meta?.changes ?? 0) > 0;
+}

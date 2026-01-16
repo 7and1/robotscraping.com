@@ -51,7 +51,8 @@ export function generateSoftwareSchema(): Record<string, unknown> {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: 'Free tier: 5 requests/day. Pro tier: $29/month for 1,000 requests/day.',
+      description:
+        'Free tier: 5 requests/day. GitHub sign-in: 50 requests/day. Paid plans are waitlist-only.',
     },
     aggregateRating: {
       '@type': 'AggregateRating',
@@ -175,7 +176,7 @@ export function generateFAQSchema(): Record<string, unknown> {
         name: 'How is pricing calculated?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Pricing is per-request. Free tier includes 5 requests/day. Pro tier at $29/month includes 1,000 requests/day. Enterprise plans available.',
+          text: 'Pricing is per-request. Free tier includes 5 requests/day. GitHub sign-in unlocks 50 requests/day. Paid plans are currently waitlist-only.',
         },
       },
       {
@@ -253,10 +254,9 @@ export function generateServiceSchema(): Record<string, unknown> {
         },
         {
           '@type': 'UnitPriceSpecification',
-          price: '29',
+          price: '0',
           priceCurrency: 'USD',
-          priceValidUntil: '2026-12-31',
-          name: 'Pro Tier - 1,000 requests/day',
+          name: 'GitHub Tier - 50 requests/day',
         },
       ],
     },

@@ -4,6 +4,7 @@ import {
   createSchedule,
   listSchedules,
   updateSchedule,
+  deleteSchedule,
   computeNextRun,
   getSchedule,
 } from '../services/schedules';
@@ -47,6 +48,11 @@ export async function handleSchedules(
   // PATCH /schedules/:id - update schedule
   if (request.method === 'PATCH' && parts.length === 2) {
     return handleUpdateSchedule(request, env, corsHeaders, parts[1], auth.apiKeyId);
+  }
+
+  // DELETE /schedules/:id - delete schedule
+  if (request.method === 'DELETE' && parts.length === 2) {
+    return handleDeleteSchedule(request, env, corsHeaders, parts[1], auth.apiKeyId);
   }
 
   return textResponse('Method Not Allowed', 405, corsHeaders);
@@ -228,4 +234,32 @@ async function authorize(
   }
 
   return { ok: true, apiKeyId: result.apiKeyId ?? null };
+}
+
+async function handleDeleteSchedule(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>,
+  scheduleId: string,
+  apiKeyId: string | null | undefined,
+): Promise<Response> {
+  const schedule = await getSchedule(env.DB, scheduleId, apiKeyId ?? null);
+  if (!schedule) {
+    return jsonResponse(
+      { success: false, error: { code: 'not_found', message: 'Schedule not found.' } },
+      404,
+      corsHeaders,
+    );
+  }
+
+  const deleted = await deleteSchedule(env.DB, scheduleId, apiKeyId ?? null);
+  if (!deleted) {
+    return jsonResponse(
+      { success: false, error: { code: 'internal_error', message: 'Failed to delete schedule.' } },
+      500,
+      corsHeaders,
+    );
+  }
+
+  return jsonResponse({ success: true }, 200, corsHeaders);
 }

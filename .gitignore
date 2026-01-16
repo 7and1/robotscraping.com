@@ -43,6 +43,7 @@ yarn-error.log*
 # Cloudflare
 .wrangler/
 workers/api/wrangler.toml
+apps/web/wrangler.toml
 apps/web/.env.local
 apps/web/.env.production.local
 

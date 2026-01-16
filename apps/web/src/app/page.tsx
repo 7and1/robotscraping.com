@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Hero, Features, TrustIndicators, Pipeline, Pricing, Cta } from '../components/home';
@@ -27,6 +28,18 @@ const OutputPanel = dynamic(() => import('../components/playground').then((m) =>
   ssr: false,
 });
 
+const ResultComparison = dynamic(
+  () => import('../components/playground').then((m) => m.ResultComparison),
+  {
+    loading: () => (
+      <div className="glass rounded-2xl p-8 flex items-center justify-center min-h-[360px]">
+        <div className="animate-pulse text-white/50">Loading comparison...</div>
+      </div>
+    ),
+    ssr: false,
+  },
+);
+
 function Navbar() {
   return (
     <nav
@@ -49,6 +62,12 @@ function Navbar() {
         </Link>
         <Link
           className="transition hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50 rounded"
+          href="/guides"
+        >
+          Guides
+        </Link>
+        <Link
+          className="transition hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50 rounded"
           href="/docs"
         >
           Docs
@@ -58,6 +77,12 @@ function Navbar() {
           href="/usage"
         >
           Usage
+        </Link>
+        <Link
+          className="transition hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50 rounded"
+          href="/login"
+        >
+          Login
         </Link>
         <Link
           className="transition hover:text-neon focus:outline-none focus:ring-2 focus:ring-neon/50 rounded"
@@ -78,11 +103,26 @@ function Navbar() {
 
 function Playground() {
   const extraction = useExtraction();
+  const [useComparisonView, setUseComparisonView] = useState(false);
 
   return (
     <section id="playground" className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
       <PlaygroundForm extraction={extraction} />
-      <OutputPanel result={extraction.result} />
+      {useComparisonView ? (
+        <ResultComparison result={extraction.result} originalContent={extraction.originalContent} />
+      ) : (
+        <OutputPanel result={extraction.result} />
+      )}
+      {extraction.result && (
+        <div className="lg:col-span-2 flex justify-center">
+          <button
+            onClick={() => setUseComparisonView(!useComparisonView)}
+            className="px-4 py-2 text-xs rounded-lg border border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:border-neon/60 hover:text-neon transition focus:outline-none focus:ring-2 focus:ring-neon/50"
+          >
+            {useComparisonView ? 'Switch to normal view' : 'Switch to comparison view'}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

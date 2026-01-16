@@ -18,7 +18,11 @@ export class RateLimiter {
   private limits: Record<string, RateLimitConfig>;
 
   constructor(limits?: Partial<typeof DEFAULT_LIMITS>) {
-    this.limits = { ...DEFAULT_LIMITS, ...limits };
+    this.limits = {
+      default: DEFAULT_LIMITS.default,
+      authenticated: DEFAULT_LIMITS.authenticated,
+      ...limits,
+    } as Record<string, RateLimitConfig>;
   }
 
   check(
@@ -92,3 +96,15 @@ export function getClientIdentifier(request: Request): string {
 
   return `anon:${crypto.randomUUID()}`;
 }
+
+// Re-export D1 rate limiting functions for convenience
+export {
+  checkRateLimit,
+  getRateLimitStatus,
+  resetRateLimit,
+  cleanupExpiredRateLimits,
+  getRateLimitHeaders as getD1RateLimitHeaders,
+  createClientId,
+  type RateLimitResult,
+  CREATE_RATE_LIMITS_TABLE,
+} from './rate-limit-d1';

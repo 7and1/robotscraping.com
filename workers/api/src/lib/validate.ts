@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ExtractRequestSchema } from '../schemas/extract.schema';
 import type { ExtractRequest } from '../types';
 import { validateCustomHeaders } from './headers';
+import { validateTargetUrl } from './ssrf';
 
 // SSRF protection patterns for webhook URLs
 const PRIVATE_IP_PATTERNS = [
@@ -112,6 +113,12 @@ export function parseExtractRequest(
       return `${path}: ${issue.message}`;
     });
     return { ok: false, message: errors.join(', ') };
+  }
+
+  // Validate target URL for SSRF protection
+  const targetUrlValidation = validateTargetUrl(result.data.url);
+  if (!targetUrlValidation.valid) {
+    return { ok: false, message: `url: ${targetUrlValidation.reason}` };
   }
 
   // Additional webhook SSRF protection

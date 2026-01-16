@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Play, ChevronDown, Code2 } from 'lucide-react';
+import { Loader2, Play, ChevronDown, Code2, Zap, Eye } from 'lucide-react';
 import clsx from 'clsx';
+
+type LoadingState = 'idle' | 'debouncing' | 'loading' | 'retrying';
 
 interface ExtractMeta {
   id?: string;
@@ -11,6 +13,13 @@ interface ExtractMeta {
   status?: string;
   requestId?: string;
   cacheHit?: boolean;
+  retryAttempt?: number;
+}
+
+interface QuotaInfo {
+  remaining: number;
+  limit: number;
+  resetAt: number;
 }
 
 interface PlaygroundFormProps {
@@ -40,6 +49,7 @@ interface PlaygroundFormProps {
     meta: ExtractMeta | null;
     error: string;
     loading: boolean;
+    loadingState: LoadingState;
     handleScrape: () => Promise<void>;
   };
 }
@@ -146,6 +156,7 @@ export function PlaygroundForm({ extraction }: PlaygroundFormProps) {
     meta,
     error,
     loading,
+    loadingState,
     handleScrape,
   } = extraction;
 
@@ -154,10 +165,46 @@ export function PlaygroundForm({ extraction }: PlaygroundFormProps) {
   const [codeLanguage, setCodeLanguage] = useState<'curl' | 'python' | 'node'>('curl');
   const [copiedCode, setCopiedCode] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
 
   const presetsButtonRef = useRef<HTMLButtonElement>(null);
   const presetsDropdownRef = useRef<HTMLDivElement>(null);
   const codeSnippetsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Fetch quota info
+  const fetchQuota = useCallback(async () => {
+    setQuotaLoading(true);
+    try {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'https://api.robotscraping.com';
+      const res = await fetch(`${apiBase}/v1/usage`, {
+        headers: apiKey ? { 'x-api-key': apiKey } : {},
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        setQuota(payload?.data?.quota || null);
+      }
+    } catch {
+      // Silently fail on quota fetch
+    } finally {
+      setQuotaLoading(false);
+    }
+  }, [apiKey]);
+
+  useEffect(() => {
+    fetchQuota();
+    // Refresh quota every 30 seconds
+    const interval = setInterval(fetchQuota, 30000);
+    return () => clearInterval(interval);
+  }, [fetchQuota]);
+
+  // Handle Try Demo click
+  const handleTryDemo = useCallback(() => {
+    setUrl('https://example.com');
+    setFields(JSON.stringify(['title', 'heading', 'paragraph', 'links'], null, 2));
+    setInstructions('Extract the main title, headings, paragraphs, and all links from the page.');
+  }, [setUrl, setFields, setInstructions]);
 
   // Close dropdowns on Escape key or click outside
   useEffect(() => {
@@ -333,6 +380,13 @@ console.log(data);`;
           <p className="text-sm text-white/60">Test with your own URL and fields.</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleTryDemo}
+            className="flex items-center gap-2 rounded-xl border border-neon/30 bg-neon/10 px-3 py-2 text-xs text-neon transition hover:bg-neon/20 hover:border-neon/60 focus:outline-none focus:ring-2 focus:ring-neon/50"
+          >
+            <Zap className="h-4 w-4" aria-hidden="true" />
+            Try Demo
+          </button>
           <div className="relative">
             <button
               ref={presetsButtonRef}
@@ -374,6 +428,27 @@ console.log(data);`;
           </div>
         </div>
       </div>
+
+      {/* Quota Display */}
+      {quota && (
+        <div className="mb-6 rounded-xl border border-white/10 bg-black/40 px-4 py-3">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 text-neon" aria-hidden="true" />
+              <span className="text-white/70">{apiKey ? 'Authenticated' : 'Anonymous'} quota</span>
+            </div>
+            <span className="text-neon font-medium">
+              {quota.remaining}/{quota.limit} remaining
+            </span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full bg-gradient-to-r from-neon/80 to-neon transition-all duration-500"
+              style={{ width: `${Math.max(0, (quota.remaining / quota.limit) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
       <div className="space-y-5 text-sm">
         <div className="space-y-2">
           <label htmlFor="target-url" className="text-xs uppercase tracking-[0.3em] text-white/40">
@@ -471,12 +546,25 @@ console.log(data);`;
               : 'bg-neon text-black shadow-neon hover:-translate-y-0.5',
           )}
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {loadingState === 'debouncing' ? (
+            <>
+              <div
+                className="h-4 w-4 animate-pulse rounded-full border-2 border-white/30 border-t-white/70"
+                aria-hidden="true"
+              />
+              Preparing...
+            </>
+          ) : loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              {error?.includes('Retrying') ? 'Retrying...' : 'Extracting...'}
+            </>
           ) : (
-            <Play className="h-4 w-4" aria-hidden="true" />
+            <>
+              <Play className="h-4 w-4" aria-hidden="true" />
+              Run extraction
+            </>
           )}
-          {loading ? 'Extracting...' : 'Run extraction'}
         </button>
         {error && (
           <div className="rounded-xl border border-laser/30 bg-laser/10 p-3" role="alert">
@@ -496,6 +584,9 @@ console.log(data);`;
             {meta.latency !== undefined ? <span>Latency: {meta.latency} ms</span> : null}
             {meta.tokens !== undefined ? <span>Tokens: {meta.tokens}</span> : null}
             {meta.cacheHit ? <span>Cache: hit</span> : null}
+            {meta.retryAttempt !== undefined && meta.retryAttempt > 0 ? (
+              <span>Retries: {meta.retryAttempt}</span>
+            ) : null}
           </div>
         )}
       </div>
