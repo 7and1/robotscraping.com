@@ -6,6 +6,7 @@ import {
   getD1RateLimitHeaders,
   createClientId,
 } from './lib/rate-limit';
+import { verifyApiKey } from './services/auth';
 import {
   handleExtract,
   handleJobs,
@@ -74,7 +75,15 @@ async function performRateLimitCheck(
   request: Request,
   env: Env,
 ): Promise<{ result: RateLimitCheckResult; headers: Record<string, string> }> {
-  const isAuthenticated = !!request.headers.get('x-api-key');
+  const rawApiKey = request.headers.get('x-api-key');
+  let isAuthenticated = false;
+  if (rawApiKey) {
+    const apiKey = rawApiKey.trim();
+    if (apiKey) {
+      const verified = await verifyApiKey(env.DB, apiKey);
+      isAuthenticated = verified.ok;
+    }
+  }
   const useD1RateLimit = env.USE_D1_RATE_LIMIT === 'true';
 
   if (useD1RateLimit) {

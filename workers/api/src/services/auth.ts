@@ -124,8 +124,12 @@ export async function upsertUser(
   return result;
 }
 
-export async function createOAuthState(db: D1Database, ttlMs: number): Promise<string> {
-  const state = generateRandomToken(16);
+export async function createOAuthState(
+  db: D1Database,
+  ttlMs: number,
+  stateValue?: string,
+): Promise<string> {
+  const state = stateValue ?? generateRandomToken(16);
   const stateHash = await sha256(state);
   const now = Date.now();
   await db
@@ -309,6 +313,46 @@ export async function createApiKey(
       tier,
       is_active: 1,
       created_at: now,
+      last_used_at: null,
+    },
+    plaintext,
+  };
+}
+
+export async function regenerateApiKey(
+  db: D1Database,
+  userId: string,
+  keyId: string,
+): Promise<{ key: ApiKeyRecord; plaintext: string } | null> {
+  const existing = await db
+    .prepare(
+      `SELECT id, user_id, key_prefix, name, tier, is_active, last_used_at, created_at
+       FROM api_keys
+       WHERE id = ? AND user_id = ?`,
+    )
+    .bind(keyId, userId)
+    .first<ApiKeyRecord>();
+
+  if (!existing) return null;
+
+  const plaintext = `rs_${generateRandomToken(24)}`;
+  const keyHash = await sha256(plaintext);
+  const keyPrefix = plaintext.slice(0, 10);
+
+  await db
+    .prepare(
+      `UPDATE api_keys
+       SET key_hash = ?, key_prefix = ?, is_active = 1, last_used_at = NULL
+       WHERE id = ? AND user_id = ?`,
+    )
+    .bind(keyHash, keyPrefix, keyId, userId)
+    .run();
+
+  return {
+    key: {
+      ...existing,
+      key_prefix: keyPrefix,
+      is_active: 1,
       last_used_at: null,
     },
     plaintext,

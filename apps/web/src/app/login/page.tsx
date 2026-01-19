@@ -43,6 +43,7 @@ const errorMessages: Record<string, string> = {
 function LoginContent() {
   const searchParams = useSearchParams();
   const errorParam = searchParams.get('error');
+  const returnToParam = searchParams.get('returnTo');
   const errorMessage = errorParam ? errorMessages[errorParam] || 'Authentication error.' : '';
 
   const apiBase = useMemo(() => {
@@ -50,7 +51,9 @@ function LoginContent() {
     return envBase || 'https://api.robotscraping.com';
   }, []);
 
-  const loginUrl = `${apiBase}/auth/github`;
+  const loginUrl = `${apiBase}/auth/github${
+    returnToParam ? `?returnTo=${encodeURIComponent(returnToParam)}` : ''
+  }`;
 
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [loading, setLoading] = useState(true);

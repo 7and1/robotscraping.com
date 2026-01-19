@@ -67,31 +67,55 @@ export async function incrementUsage(
 
   const id = `${scope}:${day}`;
 
-  const result = await db
-    .prepare(
-      `INSERT INTO daily_usage (id, scope, day, count, created_at, updated_at)
-       VALUES (?, ?, ?, 1, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET
-         count = CASE
-           WHEN daily_usage.count + 1 <= ? THEN daily_usage.count + 1
-           ELSE daily_usage.count
-         END,
-         updated_at = ?
-       RETURNING count`,
-    )
-    .bind(id, scope, day, now, now, limit, now)
-    .first<{ count: number }>();
-
-  if (!result) {
-    return { allowed: false, remaining: 0, count: 0 };
+  if (amount > limit) {
+    const current = await getUsageCount(db, scope, day);
+    return {
+      allowed: false,
+      remaining: Math.max(0, limit - current),
+      count: current,
+    };
   }
 
-  const isNew = result.count === 1;
-  const actualCount = result.count;
+  const inserted = await db
+    .prepare(
+      `INSERT INTO daily_usage (id, scope, day, count, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO NOTHING
+       RETURNING count`,
+    )
+    .bind(id, scope, day, amount, now, now)
+    .first<{ count: number }>();
 
+  if (inserted) {
+    return {
+      allowed: true,
+      remaining: Math.max(0, limit - inserted.count),
+      count: inserted.count,
+    };
+  }
+
+  const updated = await db
+    .prepare(
+      `UPDATE daily_usage
+       SET count = count + ?, updated_at = ?
+       WHERE id = ? AND count + ? <= ?
+       RETURNING count`,
+    )
+    .bind(amount, now, id, amount, limit)
+    .first<{ count: number }>();
+
+  if (updated) {
+    return {
+      allowed: true,
+      remaining: Math.max(0, limit - updated.count),
+      count: updated.count,
+    };
+  }
+
+  const current = await getUsageCount(db, scope, day);
   return {
-    allowed: true,
-    remaining: Math.max(0, limit - actualCount),
-    count: actualCount,
+    allowed: false,
+    remaining: Math.max(0, limit - current),
+    count: current,
   };
 }

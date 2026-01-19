@@ -1,4 +1,5 @@
 import { jsonResponse, textResponse } from '../lib/http';
+import { generateRandomToken } from '../lib/crypto';
 import {
   createApiKey,
   createOAuthState,
@@ -8,6 +9,7 @@ import {
   hasActiveKey,
   listKeys,
   popInitialKey,
+  regenerateApiKey,
   clearSession,
   upsertUser,
   consumeOAuthState,
@@ -62,6 +64,60 @@ function buildSessionCookie(env: Env, token: string, maxAgeSeconds: number): str
 
 function getAuthRedirect(env: Env): string {
   return env.AUTH_SUCCESS_REDIRECT?.trim() || 'https://robotscraping.com/login';
+}
+
+function getAllowedReturnToOrigin(env: Env, fallbackOrigin: string): string {
+  const redirect = getAuthRedirect(env);
+  try {
+    return new URL(redirect).origin;
+  } catch {
+    return fallbackOrigin;
+  }
+}
+
+function sanitizeReturnTo(raw: string | null, allowedOrigin: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048) return null;
+  if (trimmed.startsWith('/')) {
+    return `${allowedOrigin}${trimmed}`;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.origin !== allowedOrigin) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function encodeReturnTo(value: string): string {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeReturnTo(value: string): string | null {
+  try {
+    let base = value.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = base.length % 4;
+    if (pad) base += '='.repeat(4 - pad);
+    return atob(base);
+  } catch {
+    return null;
+  }
+}
+
+function buildStateWithReturnTo(state: string, returnTo?: string | null): string {
+  if (!returnTo) return state;
+  return `${state}.${encodeReturnTo(returnTo)}`;
+}
+
+function extractReturnToFromState(state: string, allowedOrigin: string): string | null {
+  const parts = state.split('.');
+  if (parts.length < 2) return null;
+  const encoded = parts.slice(1).join('.');
+  const decoded = decodeReturnTo(encoded);
+  if (!decoded) return null;
+  return sanitizeReturnTo(decoded, allowedOrigin);
 }
 
 function getGitHubConfig(
@@ -178,7 +234,11 @@ async function handleGitHubLogin(request: Request, env: Env, url: URL): Promise<
     );
   }
 
-  const state = await createOAuthState(env.DB, 10 * 60 * 1000);
+  const allowedOrigin = getAllowedReturnToOrigin(env, url.origin);
+  const returnTo = sanitizeReturnTo(url.searchParams.get('returnTo'), allowedOrigin);
+  const rawState = generateRandomToken(16);
+  const stateValue = buildStateWithReturnTo(rawState, returnTo);
+  const state = await createOAuthState(env.DB, 10 * 60 * 1000, stateValue);
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUrl,
@@ -202,6 +262,7 @@ async function handleGitHubCallback(request: Request, env: Env, url: URL): Promi
   }
 
   const redirectBase = getAuthRedirect(env);
+  const allowedOrigin = getAllowedReturnToOrigin(env, url.origin);
   const error = url.searchParams.get('error');
   if (error) {
     const errorCode = error === 'access_denied' ? 'oauth_denied' : 'oauth_failed';
@@ -249,6 +310,7 @@ async function handleGitHubCallback(request: Request, env: Env, url: URL): Promi
       },
     });
   }
+  const returnTo = extractReturnToFromState(state, allowedOrigin);
 
   const tokenResponse = await fetch(`${config.oauthUrl}/login/oauth/access_token`, {
     method: 'POST',
@@ -322,7 +384,7 @@ async function handleGitHubCallback(request: Request, env: Env, url: URL): Promi
     return new Response(null, {
       status: 302,
       headers: {
-        Location: redirectBase,
+        Location: returnTo ?? redirectBase,
         'Cache-Control': 'no-store',
         'Set-Cookie': cookie,
       },
@@ -401,70 +463,106 @@ async function handleAuthKeys(
     );
   }
 
-  if (extraParts.length > 0) {
-    return textResponse('Not Found', 404, corsHeaders);
+  if (extraParts.length === 0) {
+    switch (request.method) {
+      case 'GET': {
+        const keys = await listKeys(env.DB, user.id);
+        const initialKey = await popInitialKey(env.DB, token);
+        const tier = resolveTier(user.tier);
+        const limit = getDailyLimitForTier(tier);
+
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              keys: keys.map((key) => ({
+                id: key.id,
+                key_prefix: key.key_prefix,
+                name: key.name,
+                tier: resolveTier(key.tier),
+                is_active: Boolean(key.is_active),
+                last_used_at: key.last_used_at,
+                created_at: key.created_at,
+              })),
+              initial_key: initialKey,
+              quota: {
+                limit,
+                period: 'day',
+                tier,
+              },
+            },
+          },
+          200,
+          corsHeaders,
+        );
+      }
+      case 'POST': {
+        const payload = await request.json().catch(() => ({}));
+        const name = typeof payload?.name === 'string' ? payload.name.trim() : '';
+        const tier = resolveTier(user.tier);
+        const created = await createApiKey(env.DB, user.id, name || 'API Key', tier);
+
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              key: {
+                id: created.key.id,
+                key_prefix: created.key.key_prefix,
+                name: created.key.name,
+                tier: resolveTier(created.key.tier),
+                is_active: true,
+                created_at: created.key.created_at,
+              },
+              plaintext: created.plaintext,
+            },
+          },
+          200,
+          corsHeaders,
+        );
+      }
+      default:
+        return textResponse('Method Not Allowed', 405, corsHeaders);
+    }
   }
 
-  switch (request.method) {
-    case 'GET': {
-      const keys = await listKeys(env.DB, user.id);
-      const initialKey = await popInitialKey(env.DB, token);
-      const tier = resolveTier(user.tier);
-      const limit = getDailyLimitForTier(tier);
-
-      return jsonResponse(
-        {
-          success: true,
-          data: {
-            keys: keys.map((key) => ({
-              id: key.id,
-              key_prefix: key.key_prefix,
-              name: key.name,
-              tier: resolveTier(key.tier),
-              is_active: Boolean(key.is_active),
-              last_used_at: key.last_used_at,
-              created_at: key.created_at,
-            })),
-            initial_key: initialKey,
-            quota: {
-              limit,
-              period: 'day',
-              tier,
-            },
-          },
-        },
-        200,
-        corsHeaders,
-      );
-    }
-    case 'POST': {
-      const payload = await request.json().catch(() => ({}));
-      const name = typeof payload?.name === 'string' ? payload.name.trim() : '';
-      const tier = resolveTier(user.tier);
-      const created = await createApiKey(env.DB, user.id, name || 'API Key', tier);
-
-      return jsonResponse(
-        {
-          success: true,
-          data: {
-            key: {
-              id: created.key.id,
-              key_prefix: created.key.key_prefix,
-              name: created.key.name,
-              tier: resolveTier(created.key.tier),
-              is_active: true,
-              created_at: created.key.created_at,
-            },
-            plaintext: created.plaintext,
-          },
-        },
-        200,
-        corsHeaders,
-      );
-    }
-    default:
+  if (extraParts.length === 2 && extraParts[1] === 'regenerate') {
+    if (request.method !== 'POST') {
       return textResponse('Method Not Allowed', 405, corsHeaders);
+    }
+
+    const keyId = extraParts[0];
+    const regenerated = await regenerateApiKey(env.DB, user.id, keyId);
+
+    if (!regenerated) {
+      return jsonResponse(
+        { success: false, error: { code: 'not_found', message: 'API key not found.' } },
+        404,
+        corsHeaders,
+      );
+    }
+
+    return jsonResponse(
+      {
+        success: true,
+        data: {
+          key: {
+            id: regenerated.key.id,
+            key_prefix: regenerated.key.key_prefix,
+            name: regenerated.key.name,
+            tier: resolveTier(regenerated.key.tier),
+            is_active: true,
+            created_at: regenerated.key.created_at,
+          },
+          plaintext: regenerated.plaintext,
+        },
+      },
+      200,
+      corsHeaders,
+    );
   }
+
+  return textResponse('Not Found', 404, corsHeaders);
 }
 
 async function handleAuthLogout(
